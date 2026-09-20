@@ -9,7 +9,8 @@ import {
 import { ConflictError, type Key, type RecordItem, type Store, type Write } from './store'
 
 export class ServiceError extends Error {
-  constructor(public readonly code: string, message: string) { super(`${code}: ${message}`) }
+  readonly code: string
+  constructor(code: string, message: string) { super(`${code}: ${message}`); this.code = code }
 }
 type Actor = { userId: string }
 const roomKey = (roomId: string, sk: string): Key => ({ pk: `ROOM#${roomId}`, sk })
@@ -61,6 +62,17 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
   }
 
   return {
+    // Server-only entry point: deliberately not exposed as a browser mutation.
+    async appendAssistantMessage(roomId: string, content: string, actor: Actor, requestId: string): Promise<RoomEvent> {
+      await requireMember(inputId(roomId), actor)
+      idSchema.parse(requestId)
+      const message: Message = { id: requestId, roomId, userId: actor.userId,
+        content: z.string().min(1).max(16000).parse(content), type: 'ai', createdAt: now() }
+      const marker = roomKey(roomId, `REQUEST#AI#${requestId}`)
+      const saved = await createOnce(marker, message, actor, [check(memberKey(roomId, actor.userId)), put(marker, message),
+        put(roomKey(roomId, `MESSAGE#${message.createdAt}#${message.id}`), message)])
+      return event(roomId, 'message', saved.id, saved)
+    },
     async execute(operation: string, args: Record<string, unknown>, actor: Actor): Promise<unknown> {
       if (!actor.userId) throw new ServiceError('UNAUTHENTICATED', '로그인이 필요합니다.')
       const rawInput = typeof args.input === 'string' ? JSON.parse(args.input) : args.input

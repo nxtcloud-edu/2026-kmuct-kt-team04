@@ -19,6 +19,7 @@ dist-ssr
 .aws/
 .amplify/
 amplify_outputs.json
+.local-data/
 
 # Editor directories and files
 .vscode/*

@@ -6,11 +6,14 @@ React + Vite + TypeScript 공통 프로젝트와 Amplify Gen 2 백엔드 초안�
 백엔드 코드: Cognito 이메일 로그인 설정, 여행방/초대/참여, 날짜 자동 생성, 타임블록/핀 생성·수정,
 일반 채팅 저장, 방별 접근·실시간 구독 권한, 동시 수정 충돌 감지 및 중복 생성 방지.
 AWS 실제 배포와 두 사용자 실시간 통합 검증은 아직 하지 않았습니다.
-현재 화면은 실행 확인용입니다. 지도·일정·채팅·AI 화면 및 Bedrock 연동은 포함하지 않습니다.
+팀원 C의 채팅 화면에 대회 AI API와 카카오 장소 검색을 서버 경유로 연결했습니다.
+로컬 연결 모드에서는 실제 AI 답변과 검색 결과 기반 핀이 이 컴퓨터에 저장됩니다.
+지도·일정 화면 통합과 AWS 환경의 AI 서버 배포는 아직 포함하지 않습니다.
 Tailwind CSS는 아직 설치하지 않았습니다.
 
 - 팀원 B·C: [백엔드 연결 규격과 사용 예시](docs/BACKEND-CONTRACT.md)
 - 팀원 A: [AWS 배포 및 통합 검증 절차](docs/DEPLOYMENT.md)
+- 실제 AI·장소 검색 테스트: [로컬 연결 안내](docs/AI-CONNECTION.md)
 - 공통 타입: `shared/contracts.ts`
 - 화면 개발용 예시: `shared/example-room-state.ts`
 - 프런트 연결 함수: `src/lib/backend.ts`

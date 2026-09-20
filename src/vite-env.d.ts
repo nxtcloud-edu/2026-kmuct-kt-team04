@@ -1,10 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** OpenAI(ChatGPT) API 키. .env.local에 설정. */
-  readonly VITE_OPENAI_API_KEY?: string
-  /** 카카오 로컬 검색 REST 키. .env.local에 설정. */
-  readonly VITE_KAKAO_REST_KEY?: string
+  /** 로컬 연결 시험 활성화. 비밀 키는 브라우저 환경변수로 제공하지 않습니다. */
+  readonly VITE_LOCAL_BACKEND?: string
 }
 
 interface ImportMeta {

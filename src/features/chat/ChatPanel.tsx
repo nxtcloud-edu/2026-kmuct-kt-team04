@@ -9,6 +9,7 @@ interface ChatPanelProps {
   currentUserId?: string
   /** 배포 전 예시 모드용 상태. 넘기면 서버 구독 없이 이 데이터로 렌더한다. */
   exampleState?: RoomState
+  selectedTimeBlockId?: string
 }
 
 const TIME_ZONE = 'Asia/Seoul'
@@ -18,21 +19,22 @@ const timeFormatter = new Intl.DateTimeFormat('ko-KR', {
   minute: '2-digit',
 })
 
-export function ChatPanel({ roomId, currentUserId, exampleState }: ChatPanelProps) {
-  const { messages, error, sending, aiBusy, sendUserMessage, askAi } = useRoomChat({
+export function ChatPanel({ roomId, currentUserId, exampleState, selectedTimeBlockId }: ChatPanelProps) {
+  const { state, messages, error, sending, aiBusy, sendUserMessage, askAi } = useRoomChat({
     roomId,
     initialState: exampleState,
     live: !exampleState,
     currentUserId,
+    selectedTimeBlockId,
   })
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLUListElement>(null)
 
   const displayNames = useMemo(() => {
     const map = new Map<string, string>()
-    for (const member of exampleState?.members ?? []) map.set(member.userId, member.displayName)
+    for (const member of state?.members ?? []) map.set(member.userId, member.displayName)
     return map
-  }, [exampleState?.members])
+  }, [state?.members])
 
   useEffect(() => {
     const el = listRef.current
