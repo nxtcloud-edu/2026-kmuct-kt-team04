@@ -81,7 +81,7 @@ export function ChatPanel({ roomId, currentUserId, exampleState, selectedTimeBlo
         {aiBusy && (
           <li className="chat-msg chat-msg--ai">
             <span className="chat-msg__author">AI</span>
-            <span className="chat-msg__body">추천을 준비하고 있어요…</span>
+            <span className="chat-msg__body">답변 준비중...</span>
           </li>
         )}
       </ul>

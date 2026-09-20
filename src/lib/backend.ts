@@ -4,21 +4,20 @@ import { Hub } from 'aws-amplify/utils'
 import { isLocalBackend, localRequest, localRoomCall } from './local-api'
 import type { Schema } from '../../amplify/data/resource'
 import type {
-  Room, RoomState, RoomEvent, RoomInvite, CreateRoomInput, JoinRoomInput,
-  CreateTimeBlockInput, UpdateTimeBlockInput, CreatePinInput, UpdatePinInput, SendMessageInput,
+  Room, RoomState, RoomEvent, RoomInvite, CreateRoomInput, UpdateRoomInput, JoinRoomInput,
+  CreateTimeBlockInput, UpdateTimeBlockInput, CreatePinInput, UpdatePinInput, DeletePinInput,
+  ReorderPinsInput, CreateRouteInput, UpdateRouteInput, DeleteRouteInput, SendMessageInput,
 } from '../../shared/contracts'
 
 export type * from '../../shared/contracts'
 
-// Call once with the generated amplify_outputs.json after deploying the backend.
-// Importing this module alone does not require deployed resources or affect any UI.
 export function configureBackend(outputs: Parameters<typeof Amplify.configure>[0]) {
   Amplify.configure(outputs)
 }
 
 type Result<T> = { data?: T | null; errors?: readonly { message: string }[] }
 function unwrap<T>(result: Result<T>): T {
-  if (result.errors?.length) throw new Error(result.errors.map(e => e.message).join('\n'))
+  if (result.errors?.length) throw new Error(result.errors.map(error => error.message).join('\n'))
   if (result.data === undefined || result.data === null) throw new Error('EMPTY_RESPONSE: 서버 응답이 없습니다.')
   return result.data
 }
@@ -46,6 +45,10 @@ export const roomApi = {
     if (isLocalBackend) return localRoomCall('createRoom', { input })
     return decodeEvent(unwrap(await client().mutations.createRoom({ input: JSON.stringify(input) })))
   },
+  async updateRoom(input: UpdateRoomInput): Promise<RoomEvent> {
+    if (isLocalBackend) return localRoomCall('updateRoom', { input })
+    return decodeEvent(unwrap(await client().mutations.updateRoom({ input: JSON.stringify(input) })))
+  },
   async joinRoom(input: JoinRoomInput): Promise<RoomEvent> {
     if (isLocalBackend) return localRoomCall('joinRoom', { input })
     return decodeEvent(unwrap(await client().mutations.joinRoom({ input: JSON.stringify(input) })))
@@ -66,6 +69,26 @@ export const roomApi = {
     if (isLocalBackend) return localRoomCall('updatePin', { input })
     return decodeEvent(unwrap(await client().mutations.updatePin({ input: JSON.stringify(input) })))
   },
+  async deletePin(input: DeletePinInput): Promise<RoomEvent> {
+    if (isLocalBackend) return localRoomCall('deletePin', { input })
+    return decodeEvent(unwrap(await client().mutations.deletePin({ input: JSON.stringify(input) })))
+  },
+  async reorderPins(input: ReorderPinsInput): Promise<RoomEvent> {
+    if (isLocalBackend) return localRoomCall('reorderPins', { input })
+    return decodeEvent(unwrap(await client().mutations.reorderPins({ input: JSON.stringify(input) })))
+  },
+  async createRoute(input: CreateRouteInput): Promise<RoomEvent> {
+    if (isLocalBackend) return localRoomCall('createRoute', { input })
+    return decodeEvent(unwrap(await client().mutations.createRoute({ input: JSON.stringify(input) })))
+  },
+  async updateRoute(input: UpdateRouteInput): Promise<RoomEvent> {
+    if (isLocalBackend) return localRoomCall('updateRoute', { input })
+    return decodeEvent(unwrap(await client().mutations.updateRoute({ input: JSON.stringify(input) })))
+  },
+  async deleteRoute(input: DeleteRouteInput): Promise<RoomEvent> {
+    if (isLocalBackend) return localRoomCall('deleteRoute', { input })
+    return decodeEvent(unwrap(await client().mutations.deleteRoute({ input: JSON.stringify(input) })))
+  },
   async sendMessage(input: SendMessageInput): Promise<RoomEvent> {
     if (isLocalBackend) return localRoomCall('sendMessage', { input })
     return decodeEvent(unwrap(await client().mutations.sendMessage({ input: JSON.stringify(input) })))
@@ -73,7 +96,7 @@ export const roomApi = {
   subscribeRoom(roomId: string, onEvent: (event: RoomEvent) => void, onError: (error: unknown) => void) {
     if (isLocalBackend) {
       const source = new EventSource(`/api/room-events?roomId=${encodeURIComponent(roomId)}`)
-      source.onmessage = event => onEvent(JSON.parse(event.data) as RoomEvent)
+      source.onmessage = message => onEvent(JSON.parse(message.data) as RoomEvent)
       source.onerror = () => onError(new Error('LOCAL_CONNECTION: 로컬 실시간 연결을 재시도합니다.'))
       return { unsubscribe() { source.close() } }
     }
@@ -111,9 +134,7 @@ export function watchRoom(roomId: string, onState: (state: RoomState) => void, o
     if (payload.event === 'ConnectionStateChange' && detail?.connectionState === 'Connected') void refresh()
   })
   const subscription = roomApi.subscribeRoom(roomId, () => { void refresh() }, onError)
-  // Subscription is started before loading; a connection event refresh covers the initial handshake window.
   void refresh()
-  // Covers missed events during a subscription handshake or brief connection loss.
   const recoveryTimer = setInterval(() => { void refresh() }, 15000)
   return {
     refresh,

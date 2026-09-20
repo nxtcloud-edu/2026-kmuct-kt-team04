@@ -5,7 +5,7 @@ import type { AiRoomContext } from './types'
 
 export interface PlannedPin { title: string; timeBlockId: string }
 export interface AiRunResult {
-  reply: string; createdPins: Pin[]; plannedPins: PlannedPin[]; notes: string[]; persisted?: boolean
+  reply: string; createdPins: Pin[]; deletedPins: Pin[]; plannedPins: PlannedPin[]; notes: string[]; persisted?: boolean
 }
 export interface RunAiOptions { createPins?: boolean }
 
@@ -15,7 +15,7 @@ export async function runAiRequest(roomId: string, userMessage: string, context:
   if (options.createPins === false) {
     const plan = await askChatGpt(userMessage, context)
     return { reply: [plan.reply, plan.clarifyingQuestion].filter(Boolean).join('\n\n'),
-      createdPins: [], plannedPins: plan.pinSuggestions, notes: [], persisted: false }
+      createdPins: [], deletedPins: [], plannedPins: plan.pinSuggestions, notes: [], persisted: false }
   }
   return localRequest('/api/ai/run', { roomId, userMessage,
     selectedTimeBlockId: context.selectedTimeBlockId, requestId: crypto.randomUUID() })

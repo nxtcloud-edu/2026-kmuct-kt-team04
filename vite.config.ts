@@ -11,7 +11,8 @@ export default defineConfig(({ mode }) => ({
       const settings = () => {
         const env = loadEnv(mode, process.cwd(), '')
         return { apiKey: env.API_KEY ?? '', baseUrl: env.AI_BASE_URL || 'https://52.79.201.46/v1',
-          model: env.AI_MODEL || 'bedrock-gpt-5.6-sol', kakaoKey: env.KAKAO_REST_API_KEY ?? '' }
+          model: env.AI_MODEL || 'bedrock-gpt-5.6-sol', kakaoKey: env.KAKAO_REST_API_KEY ?? '',
+          directionsUrl: env.KAKAO_DIRECTIONS_URL || 'https://apis-navi.kakaomobility.com/v1/directions' }
       }
       if (loadEnv(mode, process.cwd(), '').VITE_LOCAL_BACKEND === 'true') {
         server.middlewares.use(await createLocalBackend(process.cwd(), settings))

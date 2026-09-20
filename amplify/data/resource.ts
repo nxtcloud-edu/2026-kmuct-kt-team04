@@ -16,9 +16,10 @@ const schema = a.schema({
   RoomInvite: a.customType({
     roomId: a.id().required(), inviteToken: a.string().required(), expiresAt: a.datetime().required(),
   }),
-  createRoom: mutation(), joinRoom: mutation(),
+  createRoom: mutation(), updateRoom: mutation(), joinRoom: mutation(),
   createTimeBlock: mutation(), updateTimeBlock: mutation(),
-  createPin: mutation(), updatePin: mutation(), sendMessage: mutation(),
+  createPin: mutation(), updatePin: mutation(), deletePin: mutation(), reorderPins: mutation(),
+  createRoute: mutation(), updateRoute: mutation(), deleteRoute: mutation(), sendMessage: mutation(),
   createInvite: a.mutation().arguments({ roomId: a.id().required() })
     .returns(a.ref('RoomInvite')).authorization(allow => [allow.authenticated()])
     .handler(a.handler.function(roomService)),
@@ -27,8 +28,9 @@ const schema = a.schema({
   getRoomState: a.query().arguments({ roomId: a.id().required() }).returns(a.json())
     .authorization(allow => [allow.authenticated()]).handler(a.handler.function(roomService)),
   onRoomEvent: a.subscription()
-    .for([a.ref('createRoom'), a.ref('joinRoom'), a.ref('createTimeBlock'), a.ref('updateTimeBlock'),
-      a.ref('createPin'), a.ref('updatePin'), a.ref('sendMessage')])
+    .for([a.ref('createRoom'), a.ref('updateRoom'), a.ref('joinRoom'), a.ref('createTimeBlock'), a.ref('updateTimeBlock'),
+      a.ref('createPin'), a.ref('updatePin'), a.ref('deletePin'), a.ref('reorderPins'),
+      a.ref('createRoute'), a.ref('updateRoute'), a.ref('deleteRoute'), a.ref('sendMessage')])
     .arguments({ roomId: a.id().required() })
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.custom({ entry: './on-room-event.js', dataSource: 'TravelTable' })),

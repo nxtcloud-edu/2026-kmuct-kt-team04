@@ -48,7 +48,7 @@ export function RoomsScreen({ onEnterRoom }: RoomsScreenProps) {
                 <button type="button" className="rooms__item" onClick={() => onEnterRoom(room)}>
                   <span className="rooms__item-name">{room.name}</span>
                   <span className="rooms__item-meta">
-                    {room.destination} · {room.startDate} ~ {room.endDate}
+                    {room.startDate} ~ {room.endDate}
                   </span>
                 </button>
               </li>
@@ -71,7 +71,6 @@ interface CreateRoomFormProps {
 
 function CreateRoomForm({ onCreated, onEnterRoom }: CreateRoomFormProps) {
   const [name, setName] = useState('')
-  const [destination, setDestination] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -79,8 +78,8 @@ function CreateRoomForm({ onCreated, onEnterRoom }: CreateRoomFormProps) {
   const [error, setError] = useState<string | null>(null)
 
   const valid = useMemo(
-    () => name.trim() && destination.trim() && startDate && endDate && displayName.trim() && endDate >= startDate,
-    [name, destination, startDate, endDate, displayName],
+    () => name.trim() && startDate && endDate && displayName.trim() && endDate >= startDate,
+    [name, startDate, endDate, displayName],
   )
 
   async function handleSubmit(event: React.FormEvent) {
@@ -91,7 +90,7 @@ function CreateRoomForm({ onCreated, onEnterRoom }: CreateRoomFormProps) {
     try {
       const event2 = await roomApi.createRoom({
         name: name.trim(),
-        destination: destination.trim(),
+        destination: '미지정',
         startDate,
         endDate,
         displayName: displayName.trim(),
@@ -112,15 +111,6 @@ function CreateRoomForm({ onCreated, onEnterRoom }: CreateRoomFormProps) {
       <form className="rooms__form" onSubmit={handleSubmit}>
         <label htmlFor="room-name">방 이름</label>
         <input id="room-name" value={name} maxLength={100} onChange={e => setName(e.target.value)} required />
-
-        <label htmlFor="room-destination">여행지</label>
-        <input
-          id="room-destination"
-          value={destination}
-          maxLength={100}
-          onChange={e => setDestination(e.target.value)}
-          required
-        />
 
         <div className="rooms__row">
           <div>

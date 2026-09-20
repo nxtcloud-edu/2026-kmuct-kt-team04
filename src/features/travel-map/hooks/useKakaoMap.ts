@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import type { KakaoMap, KakaoMapsNamespace, KakaoMarker } from '../types/kakao'
 import type { Pin } from '../../../../shared/contracts'
+import type { KakaoCustomOverlay, KakaoMap, KakaoMapsNamespace, KakaoMouseEvent, KakaoPolyline } from '../types/kakao'
+import type { RouteResult } from '../types/route'
 import { loadKakaoMaps } from '../lib/kakaoLoader'
 
-// Kakao 지도 인스턴스를 생성하고, 핀 목록을 마커로 렌더/정리합니다.
-// 지도 표시·확대/축소·이동은 SDK 기본 동작이며, 마커 클릭은 onPinClick으로 전달합니다.
-
-const DEFAULT_CENTER = { lat: 35.1587, lng: 129.1604 } // 부산 인근 (예시)
+const DEFAULT_CENTER = { lat: 35.1587, lng: 129.1604 }
 const DEFAULT_LEVEL = 6
 
 interface UseKakaoMapOptions {
   pins: Pin[]
+  visitOrderByPinId: Record<string, number>
+  route: RouteResult | null
+  focusPinRequest: { pinId: string; nonce: number } | null
   onPinClick: (pinId: string) => void
+  onMapRightClick: (point: { latitude: number; longitude: number }) => void
 }
 
 interface UseKakaoMapResult {
@@ -21,74 +23,120 @@ interface UseKakaoMapResult {
   error: string | null
 }
 
-export function useKakaoMap({ pins, onPinClick }: UseKakaoMapOptions): UseKakaoMapResult {
+export function useKakaoMap({ pins, visitOrderByPinId, route, focusPinRequest, onPinClick, onMapRightClick }: UseKakaoMapOptions): UseKakaoMapResult {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapsRef = useRef<KakaoMapsNamespace | null>(null)
   const mapRef = useRef<KakaoMap | null>(null)
-  const markersRef = useRef<KakaoMarker[]>([])
-  const clickRef = useRef(onPinClick)
-  clickRef.current = onPinClick
-
+  const markerOverlaysRef = useRef<KakaoCustomOverlay[]>([])
+  const routePolylineRef = useRef<KakaoPolyline | null>(null)
+  const routeLabelRef = useRef<KakaoCustomOverlay | null>(null)
+  const pinClickRef = useRef(onPinClick)
+  const rightClickRef = useRef(onMapRightClick)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // 지도 1회 생성
+  useEffect(() => { pinClickRef.current = onPinClick }, [onPinClick])
+  useEffect(() => { rightClickRef.current = onMapRightClick }, [onMapRightClick])
+
   useEffect(() => {
     let cancelled = false
+    let map: KakaoMap | null = null
+    let maps: KakaoMapsNamespace | null = null
+    const handleRightClick = (...args: unknown[]) => {
+      const event = args[0] as KakaoMouseEvent | undefined
+      if (event?.latLng) rightClickRef.current({ latitude: event.latLng.getLat(), longitude: event.latLng.getLng() })
+    }
     void (async () => {
       try {
-        const maps = await loadKakaoMaps()
+        maps = await loadKakaoMaps()
         if (cancelled || !containerRef.current) return
         mapsRef.current = maps
-        mapRef.current = new maps.Map(containerRef.current, {
-          center: new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
-          level: DEFAULT_LEVEL,
+        map = new maps.Map(containerRef.current, {
+          center: new maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng), level: DEFAULT_LEVEL,
         })
+        mapRef.current = map
+        maps.event.addListener(map, 'rightclick', handleRightClick)
         setReady(true)
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+      } catch (reason) {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
       }
     })()
     return () => {
       cancelled = true
+      if (maps && map) maps.event.removeListener(map, 'rightclick', handleRightClick)
     }
   }, [])
 
-  // 핀 → 마커 렌더 (핀 목록이 바뀔 때마다 갱신)
   useEffect(() => {
     const maps = mapsRef.current
     const map = mapRef.current
     if (!maps || !map) return
-
-    // 기존 마커 제거
-    markersRef.current.forEach(m => m.setMap(null))
-    markersRef.current = []
-
+    markerOverlaysRef.current.forEach(overlay => overlay.setMap(null))
+    markerOverlaysRef.current = []
     if (pins.length === 0) return
 
     const bounds = new maps.LatLngBounds()
-    pins.forEach(pin => {
+    for (const pin of pins) {
       const position = new maps.LatLng(pin.latitude, pin.longitude)
-      const marker = new maps.Marker({ position, map, title: pin.title })
-      maps.event.addListener(marker, 'click', () => clickRef.current(pin.id))
-      markersRef.current.push(marker)
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = `pin-map-marker pin-map-marker--${pin.status}`
+      button.title = `${visitOrderByPinId[pin.id] ?? '-'}번째 · ${pin.title}`
+      button.setAttribute('aria-label', button.title)
+      const glyph = document.createElement('span')
+      glyph.className = 'pin-map-marker__glyph'
+      glyph.textContent = '●'
+      const order = document.createElement('span')
+      order.className = 'pin-map-marker__order'
+      order.textContent = String(visitOrderByPinId[pin.id] ?? '·')
+      button.append(glyph, order)
+      button.addEventListener('click', event => { event.stopPropagation(); pinClickRef.current(pin.id) })
+      const overlay = new maps.CustomOverlay({ position, content: button, map, xAnchor: 0.5, yAnchor: 1, zIndex: 6, clickable: true })
+      markerOverlaysRef.current.push(overlay)
       bounds.extend(position)
-    })
-
-    // 마커가 여러 개면 전체가 보이도록 범위 맞춤 (지도 이동은 화면 상태일 뿐 저장하지 않음)
-    if (pins.length > 1 && !bounds.isEmpty()) {
-      map.setBounds(bounds)
-    } else if (pins.length === 1) {
-      map.panTo(new maps.LatLng(pins[0].latitude, pins[0].longitude))
     }
-  }, [pins, ready])
+    if (!route && pins.length > 1 && !bounds.isEmpty()) map.setBounds(bounds)
+    else if (!route && pins.length === 1) map.panTo(new maps.LatLng(pins[0].latitude, pins[0].longitude))
+  }, [pins, ready, route, visitOrderByPinId])
 
-  // 언마운트 시 마커 정리
   useEffect(() => {
-    return () => {
-      markersRef.current.forEach(m => m.setMap(null))
-      markersRef.current = []
-    }
+    const maps = mapsRef.current
+    const map = mapRef.current
+    routePolylineRef.current?.setMap(null)
+    routeLabelRef.current?.setMap(null)
+    routePolylineRef.current = null
+    routeLabelRef.current = null
+    if (!maps || !map || !route || route.path.length < 2) return
+
+    const path = route.path.map(point => new maps.LatLng(point.latitude, point.longitude))
+    routePolylineRef.current = new maps.Polyline({
+      map, path, strokeWeight: 6, strokeColor: '#2563eb', strokeOpacity: 0.88, strokeStyle: 'solid',
+    })
+    const midpoint = route.path[Math.floor(route.path.length / 2)]
+    const label = document.createElement('div')
+    label.className = 'map-route-label'
+    label.textContent = `🚗 ${route.label}`
+    routeLabelRef.current = new maps.CustomOverlay({
+      map, position: new maps.LatLng(midpoint.latitude, midpoint.longitude), content: label,
+      xAnchor: 0.5, yAnchor: 1.5, zIndex: 8,
+    })
+    const bounds = new maps.LatLngBounds()
+    path.forEach(point => bounds.extend(point))
+    if (!bounds.isEmpty()) map.setBounds(bounds)
+  }, [ready, route])
+
+  useEffect(() => {
+    const maps = mapsRef.current
+    const map = mapRef.current
+    if (!maps || !map || !focusPinRequest) return
+    const pin = pins.find(value => value.id === focusPinRequest.pinId)
+    if (pin) map.panTo(new maps.LatLng(pin.latitude, pin.longitude))
+  }, [focusPinRequest, pins, ready])
+
+  useEffect(() => () => {
+    markerOverlaysRef.current.forEach(overlay => overlay.setMap(null))
+    routePolylineRef.current?.setMap(null)
+    routeLabelRef.current?.setMap(null)
   }, [])
 
   return { containerRef, ready, error }

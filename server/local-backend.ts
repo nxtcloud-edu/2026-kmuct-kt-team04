@@ -6,6 +6,7 @@ import { createRoomService, publicError } from '../amplify/functions/room-servic
 import type { Pin, RoomEvent, RoomState } from '../shared/contracts'
 import { createFileStore } from './file-store'
 import { askGateway, searchKakao, UpstreamError, type AiConfig } from './ai-gateway'
+import { getRoutes, routeInput } from './route-gateway'
 
 const localRoomId = '10000000-0000-4000-8000-000000000001'
 const actor = { userId: 'local-test-user' }
@@ -23,37 +24,69 @@ export async function createLocalBackend(root: string, config: () => AiConfig) {
     if (result && typeof result === 'object' && 'eventId' in result) publish(result as RoomEvent)
     return result
   }
-  await execute('createRoom', { input: { name: '부산 연결 테스트', destination: '부산',
+  await execute('createRoom', { input: { name: '이름 없는 여행', destination: '부산',
     startDate: '2026-10-01', endDate: '2026-10-02', displayName: '로컬 테스트 사용자', requestId: localRoomId } })
-  const first = await service.execute('getRoomState', { roomId: localRoomId }, actor) as RoomState
+  let first = await service.execute('getRoomState', { roomId: localRoomId }, actor) as RoomState
+  if (['부산 연결 테스트', '부산 여행 테스트', '부산 여행'].includes(first.room.name)) {
+    await execute('updateRoom', { input: { roomId: localRoomId, name: '이름 없는 여행',
+      startDate: first.room.startDate, endDate: first.room.endDate,
+      participantCount: first.room.participantCount, expectedVersion: first.room.version } })
+    first = await service.execute('getRoomState', { roomId: localRoomId }, actor) as RoomState
+  }
   await execute('createTimeBlock', { input: { roomId: localRoomId, dayId: first.days[0].id,
     title: '해운대 산책', startTime: '10:00', endTime: '12:00', requestId: '30000000-0000-4000-8000-000000000001' } })
   const running = new Map<string, Promise<unknown>>()
 
   async function runAi(input: z.infer<typeof aiInput>) {
+    const claim = await service.beginAssistantCommand(input.roomId, actor, input.requestId)
+    if (!claim.started) {
+      if (claim.result) return claim.result
+      throw new UpstreamError('AI_REQUEST_IN_PROGRESS: 동일한 AI 요청을 처리 중입니다.')
+    }
     const state = await service.execute('getRoomState', { roomId: input.roomId }, actor) as RoomState
     const plan = await askGateway(input.userMessage, state, config(), input.selectedTimeBlockId)
+    if (plan.pinSuggestions.length && plan.pinDeletions.length) {
+      throw new UpstreamError('AI_PLAN_CONFLICT: 핀 추가와 삭제를 한 요청에서 함께 처리할 수 없습니다.')
+    }
     const createdPins: Pin[] = []
+    const deletedPins: Pin[] = []
     const notes: string[] = []
-    for (const suggestion of plan.pinSuggestions) {
-      const places = await searchKakao(suggestion.query, config())
-      const place = places[0]
-      if (!place) { notes.push(`“${suggestion.query}” 검색 결과가 없어 핀을 생성하지 않았습니다.`); continue }
-      if ([...state.pins, ...createdPins].some(pin => pin.placeId === place.placeId && pin.timeBlockId === suggestion.timeBlockId)) {
-        notes.push(`${place.name}은 이미 해당 타임블록에 있습니다.`); continue
+    if (plan.pinDeletions.length) {
+      const latest = await service.execute('getRoomState', { roomId: input.roomId }, actor) as RoomState
+      const pin = latest.pins.find(value => value.id === plan.pinDeletions[0].pinId)
+      if (!pin) {
+        notes.push('삭제하려던 핀이 이미 없어 변경하지 않았습니다.')
+      } else {
+        const result = await execute('deletePin', { input: {
+          roomId: input.roomId, pinId: pin.id, expectedVersion: pin.version, requestId: input.requestId,
+        } }) as RoomEvent
+        deletedPins.push(result.data as Pin)
+        notes.push(`“${pin.title}” 핀을 삭제했습니다.`)
       }
-      const result = await execute('createPin', { input: {
-        roomId: input.roomId, timeBlockId: suggestion.timeBlockId, title: place.name,
-        latitude: place.latitude, longitude: place.longitude, placeProvider: 'kakao', placeId: place.placeId,
-        description: [suggestion.description, place.address].filter(Boolean).join('\n').slice(0, 2000),
-        category: place.category.slice(0, 50), status: 'candidate', requestId: randomUUID(),
-      } }) as RoomEvent
-      createdPins.push(result.data as Pin)
-      notes.push(`${place.name}을 타임블록에 저장했습니다.`)
+    } else {
+      for (const suggestion of plan.pinSuggestions) {
+        const places = await searchKakao(suggestion.query, config())
+        const place = places[0]
+        if (!place) { notes.push(`“${suggestion.query}” 검색 결과가 없어 핀을 생성하지 않았습니다.`); continue }
+        if ([...state.pins, ...createdPins].some(pin => pin.placeId === place.placeId && pin.timeBlockId === suggestion.timeBlockId)) {
+          notes.push(`${place.name}은 이미 해당 타임블록에 있습니다.`); continue
+        }
+        const result = await execute('createPin', { input: {
+          roomId: input.roomId, timeBlockId: suggestion.timeBlockId, title: place.name,
+          latitude: place.latitude, longitude: place.longitude, placeProvider: 'kakao', placeId: place.placeId,
+          description: [suggestion.description, place.address].filter(Boolean).join('\n').slice(0, 2000),
+          category: place.category.slice(0, 50), status: 'candidate', requestId: randomUUID(),
+        } }) as RoomEvent
+        createdPins.push(result.data as Pin)
+        notes.push(`${place.name}을 타임블록에 저장했습니다.`)
+      }
     }
     const reply = [plan.reply, plan.clarifyingQuestion, ...notes].filter(Boolean).join('\n\n')
     publish(await service.appendAssistantMessage(input.roomId, reply, actor, input.requestId))
-    return { reply: plan.reply, notes, createdPins, plannedPins: plan.pinSuggestions, persisted: true, storage: 'local-file' }
+    const result = { reply: plan.reply, notes, createdPins, deletedPins, plannedPins: plan.pinSuggestions,
+      persisted: true, storage: 'local-file' }
+    await service.completeAssistantCommand(input.roomId, actor, input.requestId, result)
+    return result
   }
 
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -97,7 +130,6 @@ export async function createLocalBackend(root: string, config: () => AiConfig) {
         let task = running.get(key)
         if (!task) {
           task = runAi(input); running.set(key, task)
-          // Short-lived retry deduplication. Persisted room records are the durable source of truth.
           const cleanup = () => { const timer = setTimeout(() => running.delete(key), 300000); timer.unref() }
           void task.then(cleanup, cleanup)
         }
@@ -106,6 +138,9 @@ export async function createLocalBackend(root: string, config: () => AiConfig) {
       if (url.pathname === '/api/places/search') {
         const { query } = z.strictObject({ query: z.string().trim().min(1).max(200) }).parse(body)
         return respond(res, 200, await searchKakao(query, config()))
+      }
+      if (url.pathname === '/api/routes/directions') {
+        return respond(res, 200, await getRoutes(routeInput.parse(body), config()))
       }
       if (url.pathname.startsWith('/api/room/')) {
         const args = z.record(z.string(), z.unknown()).parse(body)

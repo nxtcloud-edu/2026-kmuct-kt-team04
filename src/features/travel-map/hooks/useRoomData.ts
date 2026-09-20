@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
-  RoomState,
-  CreateTimeBlockInput, UpdateTimeBlockInput, CreatePinInput, UpdatePinInput,
+  RoomState, CreateTimeBlockInput, UpdateTimeBlockInput, CreatePinInput, UpdatePinInput,
+  DeletePinInput, ReorderPinsInput, CreateRouteInput, UpdateRouteInput, DeleteRouteInput,
 } from '../../../../shared/contracts'
 import { createRoomAdapter, type RoomAdapter } from '../lib/roomAdapter'
-
-// 어댑터를 통해 방 상태를 로드/구독하고, 생성·수정 액션을 래핑합니다.
-// 화면 컴포넌트는 이 훅만 사용하며 demo/live 구분을 신경 쓰지 않습니다.
 
 export interface UseRoomData {
   mode: 'demo' | 'live' | 'loading'
@@ -16,6 +13,11 @@ export interface UseRoomData {
   updateTimeBlock: (input: UpdateTimeBlockInput) => Promise<void>
   createPin: (input: CreatePinInput) => Promise<void>
   updatePin: (input: UpdatePinInput) => Promise<void>
+  deletePin: (input: DeletePinInput) => Promise<void>
+  reorderPins: (input: ReorderPinsInput) => Promise<void>
+  createRoute: (input: CreateRouteInput) => Promise<void>
+  updateRoute: (input: UpdateRouteInput) => Promise<void>
+  deleteRoute: (input: DeleteRouteInput) => Promise<void>
   refresh: () => void
 }
 
@@ -32,7 +34,6 @@ export function useRoomData(roomId: string): UseRoomData {
 
   useEffect(() => {
     let cancelled = false
-
     void (async () => {
       try {
         const adapter = await createRoomAdapter(roomId)
@@ -40,18 +41,13 @@ export function useRoomData(roomId: string): UseRoomData {
         adapterRef.current = adapter
         setMode(adapter.mode)
         watcherRef.current = adapter.watch(
-          next => {
-            if (!cancelled) setState(next)
-          },
-          err => {
-            if (!cancelled) setError(toMessage(err))
-          },
+          next => { if (!cancelled) setState(next) },
+          err => { if (!cancelled) setError(toMessage(err)) },
         )
       } catch (err) {
         if (!cancelled) setError(toMessage(err))
       }
     })()
-
     return () => {
       cancelled = true
       watcherRef.current?.unsubscribe()
@@ -64,34 +60,23 @@ export function useRoomData(roomId: string): UseRoomData {
     const adapter = adapterRef.current
     if (!adapter) throw new Error('INTERNAL: 어댑터가 아직 준비되지 않았습니다.')
     setError(null)
-    try {
-      await action(adapter)
-    } catch (err) {
-      setError(toMessage(err))
-      throw err
-    }
+    try { await action(adapter) }
+    catch (err) { setError(toMessage(err)); throw err }
   }, [])
 
-  const createTimeBlock = useCallback(
-    (input: CreateTimeBlockInput) => run(a => a.createTimeBlock(input)),
-    [run],
-  )
-  const updateTimeBlock = useCallback(
-    (input: UpdateTimeBlockInput) => run(a => a.updateTimeBlock(input)),
-    [run],
-  )
-  const createPin = useCallback(
-    (input: CreatePinInput) => run(a => a.createPin(input)),
-    [run],
-  )
-  const updatePin = useCallback(
-    (input: UpdatePinInput) => run(a => a.updatePin(input)),
-    [run],
-  )
-  const refresh = useCallback(() => {
-    setError(null)
-    watcherRef.current?.refresh()
-  }, [])
+  const createTimeBlock = useCallback((input: CreateTimeBlockInput) => run(a => a.createTimeBlock(input)), [run])
+  const updateTimeBlock = useCallback((input: UpdateTimeBlockInput) => run(a => a.updateTimeBlock(input)), [run])
+  const createPin = useCallback((input: CreatePinInput) => run(a => a.createPin(input)), [run])
+  const updatePin = useCallback((input: UpdatePinInput) => run(a => a.updatePin(input)), [run])
+  const deletePin = useCallback((input: DeletePinInput) => run(a => a.deletePin(input)), [run])
+  const reorderPins = useCallback((input: ReorderPinsInput) => run(a => a.reorderPins(input)), [run])
+  const createRoute = useCallback((input: CreateRouteInput) => run(a => a.createRoute(input)), [run])
+  const updateRoute = useCallback((input: UpdateRouteInput) => run(a => a.updateRoute(input)), [run])
+  const deleteRoute = useCallback((input: DeleteRouteInput) => run(a => a.deleteRoute(input)), [run])
+  const refresh = useCallback(() => { setError(null); watcherRef.current?.refresh() }, [])
 
-  return { mode, state, error, createTimeBlock, updateTimeBlock, createPin, updatePin, refresh }
+  return {
+    mode, state, error, createTimeBlock, updateTimeBlock, createPin, updatePin, deletePin, reorderPins,
+    createRoute, updateRoute, deleteRoute, refresh,
+  }
 }

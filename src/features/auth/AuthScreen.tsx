@@ -104,7 +104,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 
   return (
     <section className="auth" aria-label="로그인 및 회원가입">
-      <h1>공동 여행 계획</h1>
+      <h1>Pintravle</h1>
 
       {mode === 'confirm' ? (
         <form className="auth__form" onSubmit={handleConfirm}>

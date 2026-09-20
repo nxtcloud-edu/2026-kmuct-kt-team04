@@ -4,7 +4,8 @@ import type { RoomState } from './contracts'
 export const exampleRoomState: RoomState = {
   room: {
     id: '10000000-0000-4000-8000-000000000001', name: '부산 여행', destination: '부산',
-    startDate: '2026-10-01', endDate: '2026-10-02', createdBy: 'example-user-a', version: 1,
+    startDate: '2026-10-01', endDate: '2026-10-02', participantCount: 4,
+    createdBy: 'example-user-a', version: 1,
     createdAt: '2026-09-20T03:00:00.000Z', updatedAt: '2026-09-20T03:00:00.000Z',
   },
   members: [{
@@ -19,6 +20,7 @@ export const exampleRoomState: RoomState = {
     id: '30000000-0000-4000-8000-000000000001', roomId: '10000000-0000-4000-8000-000000000001',
     dayId: '20000000-0000-4000-8000-000000000001', title: '해운대 산책', startTime: '10:00', endTime: '12:00',
     description: '', createdBy: 'example-user-a', version: 1,
+    pinOrder: ['40000000-0000-4000-8000-000000000001'],
     createdAt: '2026-09-20T03:00:00.000Z', updatedAt: '2026-09-20T03:00:00.000Z',
   }],
   pins: [{
@@ -29,6 +31,7 @@ export const exampleRoomState: RoomState = {
     createdBy: 'example-user-a', version: 1,
     createdAt: '2026-09-20T03:00:00.000Z', updatedAt: '2026-09-20T03:00:00.000Z',
   }],
+  routes: [],
   messages: [{
     id: '50000000-0000-4000-8000-000000000001', roomId: '10000000-0000-4000-8000-000000000001',
     userId: 'example-user-a', type: 'user', content: '첫날은 어디부터 갈까요?', createdAt: '2026-09-20T03:00:00.000Z',
