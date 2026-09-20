@@ -52,6 +52,8 @@ export interface ChatMessage {
 
 /** AI 오케스트레이션에 넘길 방 컨텍스트. */
 export interface AiRoomContext {
+  roomId: string
+  selectedTimeBlockId?: string
   destination: string
   startDate: string
   endDate: string
@@ -61,6 +63,7 @@ export interface AiRoomContext {
 
 export function toAiRoomContext(state: RoomState): AiRoomContext {
   return {
+    roomId: state.room.id,
     destination: state.room.destination,
     startDate: state.room.startDate,
     endDate: state.room.endDate,

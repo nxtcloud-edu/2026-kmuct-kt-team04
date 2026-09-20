@@ -15,6 +15,7 @@ interface UseRoomChatOptions {
   live?: boolean
   /** 예시 모드에서 내가 보낸 로컬 메시지의 작성자 ID로 쓴다. */
   currentUserId?: string
+  selectedTimeBlockId?: string
 }
 
 interface UseRoomChat {
@@ -43,6 +44,7 @@ export function useRoomChat({
   initialState,
   live = true,
   currentUserId,
+  selectedTimeBlockId,
 }: UseRoomChatOptions): UseRoomChat {
   const [state, setState] = useState<RoomState | null>(initialState ?? null)
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([])
@@ -122,23 +124,26 @@ export function useRoomChat({
       setAiBusy(true)
       try {
         // 예시 모드: 서버 핀 생성 없이 ChatGPT 답변만 미리보기로 보여준다.
-        const result = await runAiRequest(roomId, question, toAiRoomContext(state), { createPins: live })
-        addLocal(aiMessage(result.reply))
-        for (const note of result.notes) addLocal(systemMessage(note))
+        const result = await runAiRequest(roomId, question,
+          { ...toAiRoomContext(state), selectedTimeBlockId }, { createPins: live })
+        if (!result.persisted) {
+          addLocal(aiMessage(result.reply))
+          for (const note of result.notes) addLocal(systemMessage(note))
+        }
         if (!live && result.plannedPins.length > 0) {
           const summary = result.plannedPins
             .map(p => `· "${p.title}" → ${blockTitle(state, p.timeBlockId)}`)
             .join('\n')
           addLocal(systemMessage(`배포 전 미리보기입니다. AWS 연결 후 아래 핀이 실제로 추가됩니다:\n${summary}`))
         }
-        if (result.createdPins.length > 0) await refresh()
+        if (result.persisted || result.createdPins.length > 0) await refresh()
       } catch (err) {
         addLocal(systemMessage(`AI 처리 중 오류가 발생했습니다: ${errorText(err)}`))
       } finally {
         setAiBusy(false)
       }
     },
-    [roomId, state, sendUserMessage, addLocal, refresh, live],
+    [roomId, state, sendUserMessage, addLocal, refresh, live, selectedTimeBlockId],
   )
 
   const messages = useMemo<ChatMessage[]>(() => {
