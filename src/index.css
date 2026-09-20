@@ -160,3 +160,269 @@ main {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.app-bar h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.app-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-bar__user {
+  font-size: 0.85rem;
+  color: #5b6472;
+}
+
+.app-bar__badge {
+  font-size: 0.75rem;
+  color: #8a6d1a;
+  background: #fff7e6;
+  border: 1px solid #ffe1a6;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+}
+
+.app-bar button,
+.app-back {
+  padding: 0.4rem 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd2dd;
+  background: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-back {
+  margin-top: 1rem;
+}
+
+.app-room-title {
+  color: #5b6472;
+  margin: 0.75rem 0 0;
+}
+
+/* 인증 화면 */
+.auth {
+  max-width: 24rem;
+  margin: 3rem auto 0;
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid #d5dbe6;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 1.25rem;
+}
+
+.auth__form h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.auth__form label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #3b4657;
+}
+
+.auth__form input {
+  padding: 0.55rem;
+  border: 1px solid #cbd2dd;
+  border-radius: 0.5rem;
+  font: inherit;
+}
+
+.auth__form button[type='submit'] {
+  margin-top: 0.5rem;
+  padding: 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2f6fed;
+  background: #2f6fed;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.auth__form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth__link {
+  background: none;
+  border: none;
+  color: #2f6fed;
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+  padding: 0.25rem;
+}
+
+.auth__hint {
+  font-size: 0.85rem;
+  color: #5b6472;
+  margin: 0 0 0.25rem;
+}
+
+.auth__error {
+  color: #b3261e;
+  font-size: 0.9rem;
+}
+
+.auth__notice {
+  color: #1a7a3d;
+  font-size: 0.9rem;
+}
+
+/* 방 목록/생성/참여 */
+.rooms {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 48rem) {
+  .rooms {
+    grid-template-columns: 1fr 1fr;
+  }
+  .rooms__panel:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.rooms__panel {
+  border: 1px solid #d5dbe6;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 1rem;
+}
+
+.rooms__panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.rooms__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rooms__refresh {
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd2dd;
+  background: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rooms__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rooms__item {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem;
+  border: 1px solid #e4e8ef;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rooms__item:hover {
+  border-color: #b8c6ff;
+  background: #f2f5ff;
+}
+
+.rooms__item-name {
+  font-weight: 600;
+}
+
+.rooms__item-meta {
+  font-size: 0.8rem;
+  color: #5b6472;
+}
+
+.rooms__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rooms__form label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #3b4657;
+}
+
+.rooms__form input {
+  padding: 0.5rem;
+  border: 1px solid #cbd2dd;
+  border-radius: 0.5rem;
+  font: inherit;
+}
+
+.rooms__row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.rooms__row > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rooms__form button[type='submit'] {
+  margin-top: 0.5rem;
+  padding: 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2f6fed;
+  background: #2f6fed;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rooms__form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rooms__muted {
+  color: #5b6472;
+  font-size: 0.9rem;
+}
+
+.rooms__error {
+  color: #b3261e;
+  font-size: 0.9rem;
+}
