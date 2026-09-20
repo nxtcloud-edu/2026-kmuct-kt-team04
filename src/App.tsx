@@ -5,6 +5,7 @@ import { useAuth } from './features/auth/useAuth'
 import { AuthScreen } from './features/auth/AuthScreen'
 import { RoomsScreen } from './features/rooms/RoomsScreen'
 import { ChatPanel } from './features/chat/ChatPanel'
+import TravelMapPanel from './features/travel-map/TravelMapPanel'
 import { exampleRoomState } from '../shared/example-room-state'
 
 type BootState = 'loading' | 'ready' | 'not-deployed'
