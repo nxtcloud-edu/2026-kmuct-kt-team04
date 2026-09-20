@@ -3,6 +3,7 @@ import type {
   ReorderPinsInput, RoomEvent, RoomState, UpdatePinInput, UpdateRouteInput, UpdateTimeBlockInput,
 } from '../../../../shared/contracts'
 import { isLocalBackend } from '../../../lib/local-api'
+import type { DeleteTimeBlockInput } from '../../../../shared/contracts'
 
 export interface RoomWatcher {
   refresh(): void
@@ -15,6 +16,7 @@ export interface RoomAdapter {
   watch(onState: (state: RoomState) => void, onError: (error: unknown) => void): RoomWatcher
   createTimeBlock(input: CreateTimeBlockInput): Promise<RoomEvent>
   updateTimeBlock(input: UpdateTimeBlockInput): Promise<RoomEvent>
+  deleteTimeBlock(input: DeleteTimeBlockInput): Promise<RoomEvent>
   createPin(input: CreatePinInput): Promise<RoomEvent>
   updatePin(input: UpdatePinInput): Promise<RoomEvent>
   deletePin(input: DeletePinInput): Promise<RoomEvent>

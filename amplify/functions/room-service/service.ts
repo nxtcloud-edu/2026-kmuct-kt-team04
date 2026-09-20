@@ -2,13 +2,14 @@ import { Buffer } from 'node:buffer'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
-  createRoomInput, updateRoomInput, joinRoomInput, createTimeBlockInput, updateTimeBlockInput,
+  createRoomInput, updateRoomInput, joinRoomInput, createTimeBlockInput, updateTimeBlockInput, deleteTimeBlockInput,
   createPinInput, updatePinInput, deletePinInput, reorderPinsInput, sendMessageInput,
   createRouteInput, updateRouteInput, deleteRouteInput, idSchema,
   type Room, type RoomMember, type TravelDay, type TimeBlock, type Pin, type TravelRoute, type Message,
   type RoomEvent, type RoomState, type RoomInvite,
 } from '../../../shared/contracts'
 import { ConflictError, type Key, type RecordItem, type Store, type Write } from './store'
+import type { PlaceRecommendation } from '../../../shared/contracts'
 
 export class ServiceError extends Error {
   readonly code: string
@@ -62,6 +63,11 @@ function decodeRouteReplay(value: unknown): { userId: string; result: RoomEvent 
   return { ...saved, result: { ...saved.result, data: decodeTravelRoute(saved.result.data) } }
 }
 const normalizeRoom = (room: Room): Room => ({ ...room, participantCount: room.participantCount ?? 1 })
+function activeBlock(record: RecordItem): TimeBlock {
+  const block = getData<TimeBlock>(record)
+  if (block.deleting) throw new ServiceError('NOT_FOUND', '삭제 중인 타임블록입니다.')
+  return block
+}
 function normalizePinOrder(block: TimeBlock, pins: Pin[]): string[] {
   const blockPins = pins.filter(pin => pin.timeBlockId === block.id)
   const currentIds = new Set(blockPins.map(pin => pin.id))
@@ -131,6 +137,17 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
   }
 
   return {
+    // Only the single-room HTTP server calls this; not a public GraphQL mutation.
+    async enterSharedRoom(roomId: string, actor: Actor, displayName: string) {
+      const key = memberKey(inputId(roomId), actor.userId)
+      const name = z.string().trim().min(1).max(40).parse(displayName)
+      const existing = await store.get(key)
+      if (existing && getData<RoomMember>(existing).displayName === name) return
+      const member: RoomMember = { roomId, userId: actor.userId, role: 'member',
+        displayName: name, joinedAt: existing ? getData<RoomMember>(existing).joinedAt : now() }
+      await store.transact([check(roomKey(roomId, 'META')), put(key, member, existing ? expectation(existing) : 'absent', (existing?.version ?? 0) + 1)])
+      return event(roomId, 'member', actor.userId, member, existing ? 'updated' : 'created')
+    },
     async beginAssistantCommand(roomId: string, actor: Actor, requestId: string) {
       await requireMember(inputId(roomId), actor)
       idSchema.parse(requestId)
@@ -166,11 +183,11 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
       return result
     },
     // Server-only entry point: deliberately not exposed as a browser mutation.
-    async appendAssistantMessage(roomId: string, content: string, actor: Actor, requestId: string): Promise<RoomEvent> {
+    async appendAssistantMessage(roomId: string, content: string, actor: Actor, requestId: string, places: PlaceRecommendation[] = []): Promise<RoomEvent> {
       await requireMember(inputId(roomId), actor)
       idSchema.parse(requestId)
       const message: Message = { id: requestId, roomId, userId: actor.userId,
-        content: z.string().min(1).max(16000).parse(content), type: 'ai', createdAt: now() }
+        content: z.string().min(1).max(16000).parse(content), type: 'ai', createdAt: now(), places }
       const marker = roomKey(roomId, `REQUEST#AI#${requestId}`)
       const saved = await createOnce(marker, message, actor, [check(memberKey(roomId, actor.userId)), put(marker, message),
         put(roomKey(roomId, `MESSAGE#${message.createdAt}#${message.id}`), message)])
@@ -234,7 +251,7 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
               existingRecord ? expectation(existingRecord) : 'absent', (existingRecord?.version ?? 0) + 1)]
           })
           const room: Room = {
-            ...previous, name: input.name, startDate: input.startDate, endDate: input.endDate,
+            ...previous, name: input.name, destination: input.destination ?? previous.destination, startDate: input.startDate, endDate: input.endDate,
             participantCount: input.participantCount, version: input.expectedVersion + 1, updatedAt: now(),
           }
           await store.transact([
@@ -297,15 +314,17 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
             store.query(`ROOM#${roomId}`, 'BLOCK#'), store.query(`ROOM#${roomId}`, 'PIN#'),
             store.query(`ROOM#${roomId}`, 'ROUTE#'), store.query(`ROOM#${roomId}`, 'MESSAGE#', 101, true),
           ])
-          const pinValues = pins.map(getData<Pin>)
-          const blockValues = blocks.map(getData<TimeBlock>).map(block => ({
+          const activeBlocks = blocks.map(getData<TimeBlock>).filter(block => !block.deleting)
+          const activeIds = new Set(activeBlocks.map(block => block.id))
+          const pinValues = pins.map(getData<Pin>).filter(pin => activeIds.has(pin.timeBlockId))
+          const blockValues = activeBlocks.map(block => ({
             ...block, pinOrder: normalizePinOrder(block, pinValues),
           }))
           return {
             room: normalizeRoom(room), members: members.map(getData<RoomMember>),
             days: days.map(getData<TravelDay>).sort((a, b) => a.dayNumber - b.dayNumber),
             timeBlocks: blockValues.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id)),
-            pins: pinValues, routes: routes.map(value => decodeTravelRoute(value.data)),
+            pins: pinValues, routes: routes.map(value => decodeTravelRoute(value.data)).filter(route => activeIds.has(route.timeBlockId)),
             messages: messages.slice(0, 100).map(getData<Message>).reverse(),
             messagesHasMore: messages.length > 100,
           } satisfies RoomState
@@ -331,13 +350,50 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
           await requireMember(input.roomId, actor)
           const key = roomKey(input.roomId, `BLOCK#${input.timeBlockId}`)
           const previousRecord = await record(key)
-          const previous = getData<TimeBlock>(previousRecord)
+          const previous = activeBlock(previousRecord)
           if (previous.version !== input.expectedVersion) throw new ConflictError()
           const block: TimeBlock = { ...previous, title: input.title, startTime: input.startTime, endTime: input.endTime,
             description: input.description, version: input.expectedVersion + 1, updatedAt: now() }
           await store.transact([check(memberKey(input.roomId, actor.userId)),
             put(key, block, expectation(previousRecord), block.version)])
           return event(input.roomId, 'timeBlock', block.id, block, 'updated')
+        }
+        case 'deleteTimeBlock': {
+          const input = deleteTimeBlockInput.parse(rawInput)
+          await requireMember(input.roomId, actor)
+          const key = roomKey(input.roomId, `BLOCK#${input.timeBlockId}`)
+          const requestKey = roomKey(input.roomId, `REQUEST#DELETE_BLOCK#${input.requestId}`)
+          const replay = await store.get(requestKey)
+          if (replay) {
+            const saved = getData<{ userId: string; result: RoomEvent }>(replay)
+            if (saved.userId !== actor.userId) throw new ConflictError()
+            return saved.result
+          }
+          const previousRecord = await record(key)
+          const block = getData<TimeBlock>(previousRecord)
+          if (!block.deleting) {
+            if (block.version !== input.expectedVersion) throw new ConflictError()
+            await store.transact([check(memberKey(input.roomId, actor.userId)),
+              put(key, { ...block, deleting: true, version: block.version + 1 }, expectation(previousRecord), block.version + 1)])
+          }
+          // The tombstone fences new pins/routes. Chunking also supports more than 100 children.
+          const [pins, routes] = await Promise.all([
+            store.query(`ROOM#${input.roomId}`, 'PIN#'), store.query(`ROOM#${input.roomId}`, 'ROUTE#'),
+          ])
+          const children = pins.filter(row => getData<Pin>(row).timeBlockId === block.id)
+          const pinIds = new Set(children.map(row => getData<Pin>(row).id))
+          children.push(...routes.filter(row => {
+            const route = decodeTravelRoute(row.data)
+            return route.timeBlockId === block.id || pinIds.has(route.originPinId) || pinIds.has(route.destinationPinId)
+          }))
+          for (let index = 0; index < children.length; index += 90) {
+            const remaining = (await Promise.all(children.slice(index, index + 90).map(row => store.get(row)))).filter((row): row is RecordItem => Boolean(row))
+            if (remaining.length) await store.transact(remaining.map(row => remove(row)))
+          }
+          const result = event(input.roomId, 'timeBlock', block.id, block, 'deleted')
+          await store.transact([check(memberKey(input.roomId, actor.userId)), remove(key),
+            put(requestKey, { userId: actor.userId, result })])
+          return result
         }
         case 'createPin': {
           const input = createPinInput.parse(rawInput)
@@ -347,7 +403,7 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
           await requireMember(input.roomId, actor)
           const blockKey = roomKey(input.roomId, `BLOCK#${input.timeBlockId}`)
           const blockRecord = await record(blockKey)
-          const previousBlock = getData<TimeBlock>(blockRecord)
+          const previousBlock = activeBlock(blockRecord)
           const currentPins = (await store.query(`ROOM#${input.roomId}`, 'PIN#')).map(getData<Pin>)
           const { requestId, ...fields } = input
           const pin: Pin = { ...fields, id: requestId, createdBy: actor.userId, ...stamp() }
@@ -368,9 +424,15 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
           await requireMember(input.roomId, actor)
           const key = roomKey(input.roomId, `PIN#${input.pinId}`)
           const previous = await entity<Pin>(key)
+          const blockKey = roomKey(input.roomId, `BLOCK#${previous.timeBlockId}`)
+          const blockRecord = await record(blockKey)
+          const block = activeBlock(blockRecord)
           const pin: Pin = { ...previous, title: input.title, description: input.description,
+            ...(input.visitOrder === undefined ? {} : { visitOrder: input.visitOrder }),
             category: input.category, status: input.status, version: input.expectedVersion + 1, updatedAt: now() }
-          await store.transact([check(memberKey(input.roomId, actor.userId)), put(key, pin, input.expectedVersion, pin.version)])
+          await store.transact([check(memberKey(input.roomId, actor.userId)),
+            put(blockKey, { ...block, version: block.version + 1 }, expectation(blockRecord), block.version + 1),
+            put(key, pin, input.expectedVersion, pin.version)])
           return event(input.roomId, 'pin', pin.id, pin, 'updated')
         }
         case 'deletePin': {
@@ -389,7 +451,7 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
           if (pin.version !== input.expectedVersion) throw new ConflictError()
           const blockKey = roomKey(input.roomId, `BLOCK#${pin.timeBlockId}`)
           const blockRecord = await record(blockKey)
-          const previousBlock = getData<TimeBlock>(blockRecord)
+          const previousBlock = activeBlock(blockRecord)
           const [currentPins, routeRecords] = await Promise.all([
             store.query(`ROOM#${input.roomId}`, 'PIN#'), store.query(`ROOM#${input.roomId}`, 'ROUTE#'),
           ])
@@ -425,7 +487,7 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
           }
           const blockKey = roomKey(input.roomId, `BLOCK#${input.timeBlockId}`)
           const blockRecord = await record(blockKey)
-          const previousBlock = getData<TimeBlock>(blockRecord)
+          const previousBlock = activeBlock(blockRecord)
           if (previousBlock.version !== input.expectedVersion) throw new ConflictError()
           const currentPins = (await store.query(`ROOM#${input.roomId}`, 'PIN#')).map(getData<Pin>)
           const currentIds = normalizePinOrder(previousBlock, currentPins)
@@ -459,7 +521,7 @@ export function createRoomService(store: Store, clock: () => Date = () => new Da
             record(roomKey(input.roomId, `PIN#${input.destinationPinId}`)),
             store.query(`ROOM#${input.roomId}`, 'PIN#'), store.query(`ROOM#${input.roomId}`, 'ROUTE#'),
           ])
-          const previousBlock = getData<TimeBlock>(blockRecord)
+          const previousBlock = activeBlock(blockRecord)
           const origin = getData<Pin>(originRecord)
           const destination = getData<Pin>(destinationRecord)
           if (origin.timeBlockId !== input.timeBlockId || destination.timeBlockId !== input.timeBlockId) {

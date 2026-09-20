@@ -18,11 +18,16 @@ class MemoryStore implements Store {
   async transact(writes: Write[]) {
     for (const write of writes) {
       const previous = this.items.get(this.key(write.kind === 'put' ? write.item : write.key))
-      if (write.kind === 'check' ? !previous : write.expected === 'absent' ? !!previous : previous?.version !== write.expected) {
+      if (write.kind === 'check' ? !previous : write.expected === 'absent' ? !!previous :
+        write.expected === 'exists' ? !previous : write.expected === 'unversioned' ? !previous || previous.version !== undefined : previous?.version !== write.expected) {
         throw new ConflictError()
       }
     }
-    for (const write of writes) if (write.kind === 'put') this.items.set(this.key(write.item), structuredClone(write.item))
+    assert.ok(writes.length <= 100, 'DynamoDB transaction action limit')
+    for (const write of writes) {
+      if (write.kind === 'put') this.items.set(this.key(write.item), structuredClone(write.item))
+      if (write.kind === 'delete') this.items.delete(this.key(write.key))
+    }
   }
 }
 const alice = { userId: 'alice' }, bob = { userId: 'bob' }, outsider = { userId: 'outsider' }

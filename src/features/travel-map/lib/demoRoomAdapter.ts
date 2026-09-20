@@ -8,6 +8,7 @@ import type {
   UpdatePinInput, DeletePinInput, ReorderPinsInput, CreateRouteInput, UpdateRouteInput, DeleteRouteInput,
 } from '../../../../shared/contracts'
 import type { RoomAdapter, RoomWatcher } from './roomAdapter'
+import { deleteTimeBlockInput } from '../../../../shared/contracts'
 
 const DEMO_USER = 'demo-user-b'
 const deepClone = <T>(value: T): T => typeof structuredClone === 'function'
@@ -52,6 +53,23 @@ export function createDemoRoomAdapter(_roomId: string): RoomAdapter {
 
   return {
     mode: 'demo',
+    deleteTimeBlock(input) {
+      const parsed = validate(deleteTimeBlockInput, input)
+      ensureRoom(parsed.roomId)
+      const key = `block:delete:${parsed.requestId}`
+      const cached = idempotency.get(key)
+      if (cached) return Promise.resolve(cached)
+      const block = state.timeBlocks.find(value => value.id === parsed.timeBlockId)
+      if (!block) throw new Error('NOT_FOUND: 타임블록을 찾을 수 없습니다.')
+      if (block.version !== parsed.expectedVersion) throw new Error('CONFLICT: 타임블록이 변경되었습니다.')
+      const ids = new Set(state.pins.filter(pin => pin.timeBlockId === block.id).map(pin => pin.id))
+      state.timeBlocks = state.timeBlocks.filter(value => value.id !== block.id)
+      state.pins = state.pins.filter(pin => !ids.has(pin.id))
+      state.routes = state.routes.filter(route => route.timeBlockId !== block.id && !ids.has(route.originPinId) && !ids.has(route.destinationPinId))
+      const result = event('timeBlock', 'deleted', block.id, deepClone(block))
+      idempotency.set(key, result); emit()
+      return Promise.resolve(result)
+    },
     loadRoomState: () => Promise.resolve(deepClone(state)),
     watch(onState, _onError): RoomWatcher {
       listeners.add(onState)
@@ -114,6 +132,7 @@ export function createDemoRoomAdapter(_roomId: string): RoomAdapter {
       if (!pin) return Promise.reject(new Error('NOT_FOUND: 핀을 찾을 수 없습니다.'))
       if (pin.version !== parsed.expectedVersion) return Promise.reject(new Error('CONFLICT: 다른 사용자가 먼저 수정했습니다. 최신 데이터를 다시 읽으세요.'))
       Object.assign(pin, { title: parsed.title, description: parsed.description, category: parsed.category,
+        ...(parsed.visitOrder === undefined ? {} : { visitOrder: parsed.visitOrder }),
         status: parsed.status, version: pin.version + 1, updatedAt: nowIso() })
       const result = event('pin', 'updated', pin.id, deepClone(pin)); emit()
       return Promise.resolve(result)

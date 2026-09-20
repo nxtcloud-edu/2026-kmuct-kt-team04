@@ -4,6 +4,7 @@ import type {
   DeletePinInput, ReorderPinsInput, CreateRouteInput, UpdateRouteInput, DeleteRouteInput,
 } from '../../../../shared/contracts'
 import { createRoomAdapter, type RoomAdapter } from '../lib/roomAdapter'
+import type { DeleteTimeBlockInput } from '../../../../shared/contracts'
 
 export interface UseRoomData {
   mode: 'demo' | 'live' | 'loading'
@@ -11,6 +12,7 @@ export interface UseRoomData {
   error: string | null
   createTimeBlock: (input: CreateTimeBlockInput) => Promise<void>
   updateTimeBlock: (input: UpdateTimeBlockInput) => Promise<void>
+  deleteTimeBlock: (input: DeleteTimeBlockInput) => Promise<void>
   createPin: (input: CreatePinInput) => Promise<void>
   updatePin: (input: UpdatePinInput) => Promise<void>
   deletePin: (input: DeletePinInput) => Promise<void>
@@ -66,6 +68,7 @@ export function useRoomData(roomId: string): UseRoomData {
 
   const createTimeBlock = useCallback((input: CreateTimeBlockInput) => run(a => a.createTimeBlock(input)), [run])
   const updateTimeBlock = useCallback((input: UpdateTimeBlockInput) => run(a => a.updateTimeBlock(input)), [run])
+  const deleteTimeBlock = useCallback((input: DeleteTimeBlockInput) => run(a => a.deleteTimeBlock(input)), [run])
   const createPin = useCallback((input: CreatePinInput) => run(a => a.createPin(input)), [run])
   const updatePin = useCallback((input: UpdatePinInput) => run(a => a.updatePin(input)), [run])
   const deletePin = useCallback((input: DeletePinInput) => run(a => a.deletePin(input)), [run])
@@ -76,7 +79,7 @@ export function useRoomData(roomId: string): UseRoomData {
   const refresh = useCallback(() => { setError(null); watcherRef.current?.refresh() }, [])
 
   return {
-    mode, state, error, createTimeBlock, updateTimeBlock, createPin, updatePin, deletePin, reorderPins,
+    mode, state, error, createTimeBlock, updateTimeBlock, deleteTimeBlock, createPin, updatePin, deletePin, reorderPins,
     createRoute, updateRoute, deleteRoute, refresh,
   }
 }

@@ -84,6 +84,16 @@ export function TravelMapPanel({ roomId, onSelectedTimeBlockChange }: TravelMapP
     await room.updateTimeBlock({ roomId: effectiveRoomId, timeBlockId: block.id, title: values.title,
       startTime: values.startTime, endTime: values.endTime, description: values.description, expectedVersion: block.version })
   }
+  async function handleDeleteTimeBlock(block: TimeBlock) {
+    await room.deleteTimeBlock({ roomId: effectiveRoomId, timeBlockId: block.id,
+      expectedVersion: block.version, requestId: crypto.randomUUID() })
+    if (selection.selectedTimeBlockId === block.id) handleSelectTimeBlock(null)
+    setOpenPinId(null)
+  }
+  async function handleVisitOrder(pin: Pin, visitOrder: number) {
+    await room.updatePin({ roomId: effectiveRoomId, pinId: pin.id, title: pin.title,
+      description: pin.description, category: pin.category, status: pin.status, visitOrder, expectedVersion: pin.version })
+  }
   async function handleAddPin(timeBlockId: string, place: PlaceSearchResult) {
     await room.createPin({ roomId: effectiveRoomId, timeBlockId, title: place.title, latitude: place.latitude,
       longitude: place.longitude, placeProvider: place.placeProvider, placeId: place.placeId,
@@ -254,7 +264,8 @@ export function TravelMapPanel({ roomId, onSelectedTimeBlockChange }: TravelMapP
           days={selection.days} selectedDayId={selection.selectedDayId} onSelectDay={handleSelectDay}
           timeBlocks={selection.timeBlocksOfDay} selectedTimeBlockId={selection.selectedTimeBlockId}
           onSelectTimeBlock={handleSelectTimeBlock} pins={pins} routes={storedRoutes} onFocusPin={focusPin}
-          onSelectRoute={handleSelectStoredRoute} onReorderPins={handleReorderPins}
+          onSelectRoute={handleSelectStoredRoute} onReorderPins={handleReorderPins} onSetVisitOrder={handleVisitOrder}
+          onDeleteTimeBlock={handleDeleteTimeBlock}
           onCreateTimeBlock={handleCreateTimeBlock} onUpdateTimeBlock={handleUpdateTimeBlock} /></div>
         <PlaceSearchPanel targetTimeBlock={selectedTimeBlock} onAddPin={handleAddPin} />
       </div> : <button type="button" onClick={() => setScheduleOpen(true)} style={expandBtn} aria-label="일정 펼치기">‹ 일정</button>}

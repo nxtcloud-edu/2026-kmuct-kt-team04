@@ -18,7 +18,7 @@ export const createRoomInput = z.strictObject({
 }).refine(validDateRange, '종료일은 시작일 이후여야 합니다.')
   .refine(withinThirtyDays, '여행은 최대 30일입니다.')
 export const updateRoomInput = z.strictObject({
-  roomId: idSchema, name: title, startDate: date, endDate: date, participantCount,
+  roomId: idSchema, name: title, destination: title.optional(), startDate: date, endDate: date, participantCount,
   expectedVersion: z.number().int().positive(),
 }).refine(validDateRange, '종료일은 시작일 이후여야 합니다.')
   .refine(withinThirtyDays, '여행은 최대 30일입니다.')
@@ -44,11 +44,15 @@ export const createPinInput = z.strictObject({
 }).refine(v => v.placeProvider !== 'kakao' || Boolean(v.placeId), '카카오 장소 ID가 필요합니다.')
 export const updatePinInput = z.strictObject({
   roomId: idSchema, pinId: idSchema, title, description,
+  visitOrder: z.number().int().min(1).max(9999).optional(),
   category: z.string().trim().max(50), status: z.enum(['candidate', 'confirmed']),
   expectedVersion: z.number().int().positive(),
 })
 export const deletePinInput = z.strictObject({
   roomId: idSchema, pinId: idSchema, expectedVersion: z.number().int().positive(), requestId,
+})
+export const deleteTimeBlockInput = z.strictObject({
+  roomId: idSchema, timeBlockId: idSchema, expectedVersion: z.number().int().positive(), requestId,
 })
 export const reorderPinsInput = z.strictObject({
   roomId: idSchema, timeBlockId: idSchema, orderedPinIds: z.array(idSchema).max(1000),
@@ -89,12 +93,12 @@ export interface RoomMember {
 export interface TravelDay { id: string; roomId: string; date: string; dayNumber: number }
 export interface TimeBlock extends Versioned {
   id: string; roomId: string; dayId: string; title: string; startTime: string; endTime: string;
-  description: string; createdBy: string; pinOrder?: string[]
+  description: string; createdBy: string; pinOrder?: string[]; deleting?: boolean
 }
 export interface Pin extends Versioned {
   id: string; roomId: string; timeBlockId: string; title: string; latitude: number; longitude: number;
   placeProvider: 'kakao' | 'manual'; placeId?: string; description: string; category: string;
-  status: 'candidate' | 'confirmed'; createdBy: string
+  status: 'candidate' | 'confirmed'; createdBy: string; visitOrder?: number
 }
 export interface TravelRoute extends Versioned {
   id: string; roomId: string; timeBlockId: string; name: string; mode: 'car';
@@ -103,6 +107,11 @@ export interface TravelRoute extends Versioned {
 }
 export interface Message {
   id: string; roomId: string; userId: string; content: string; type: 'user' | 'ai' | 'system'; createdAt: string
+  places?: PlaceRecommendation[]
+}
+export interface PlaceRecommendation {
+  placeId: string; name: string; address: string; category: string; latitude: number; longitude: number;
+  url: string; phone: string; reason: string
 }
 export interface RoomState {
   room: Room; members: RoomMember[]; days: TravelDay[]; timeBlocks: TimeBlock[];
@@ -118,6 +127,7 @@ export type UpdateRoomInput = z.input<typeof updateRoomInput>
 export type JoinRoomInput = z.input<typeof joinRoomInput>
 export type CreateTimeBlockInput = z.input<typeof createTimeBlockInput>
 export type UpdateTimeBlockInput = z.input<typeof updateTimeBlockInput>
+export type DeleteTimeBlockInput = z.input<typeof deleteTimeBlockInput>
 export type CreatePinInput = z.input<typeof createPinInput>
 export type UpdatePinInput = z.input<typeof updatePinInput>
 export type DeletePinInput = z.input<typeof deletePinInput>

@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Pin, TimeBlock, TravelDay, TravelRoute } from '../../../../shared/contracts'
-import { orderedPinsForBlock } from '../lib/pinOrder'
+import { orderedPinsForBlock, pinOrderIndex } from '../lib/pinOrder'
 import { formatRouteDuration } from '../types/route'
 import { TimeBlockForm, type TimeBlockFormValues } from './TimeBlockForm'
 
@@ -19,13 +19,17 @@ interface ScheduleSidebarProps {
   onReorderPins: (block: TimeBlock, orderedPinIds: string[]) => Promise<void>
   onCreateTimeBlock: (dayId: string, values: TimeBlockFormValues) => Promise<void>
   onUpdateTimeBlock: (block: TimeBlock, values: TimeBlockFormValues) => Promise<void>
+  onDeleteTimeBlock: (block: TimeBlock) => Promise<void>
+  onSetVisitOrder: (pin: Pin, value: number) => Promise<void>
 }
 
 export function ScheduleSidebar(props: ScheduleSidebarProps) {
   const { days, selectedDayId, onSelectDay, timeBlocks, selectedTimeBlockId, onSelectTimeBlock, pins,
-    routes, onFocusPin, onSelectRoute, onReorderPins, onCreateTimeBlock, onUpdateTimeBlock } = props
+    routes, onFocusPin, onSelectRoute, onCreateTimeBlock, onUpdateTimeBlock, onDeleteTimeBlock, onSetVisitOrder } = props
   const [formMode, setFormMode] = useState<'none' | 'create' | { editId: string }>('none')
-  const [reordering, setReordering] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const orderById = pinOrderIndex(timeBlocks, pins)
   const pinsByBlock = useMemo(() => new Map(timeBlocks.map(block => [block.id, orderedPinsForBlock(block, pins)])), [pins, timeBlocks])
   const routesByOrigin = useMemo(() => {
     const grouped = new Map<string, TravelRoute[]>()
@@ -34,18 +38,19 @@ export function ScheduleSidebar(props: ScheduleSidebarProps) {
   }, [routes])
   const editingBlock = typeof formMode === 'object' ? timeBlocks.find(block => block.id === formMode.editId) ?? null : null
 
-  async function move(block: TimeBlock, index: number, delta: -1 | 1) {
-    const ordered = [...(pinsByBlock.get(block.id) ?? [])]
-    const target = index + delta
-    if (target < 0 || target >= ordered.length) return
-    ;[ordered[index], ordered[target]] = [ordered[target], ordered[index]]
-    setReordering(true)
-    try { await onReorderPins(block, ordered.map(pin => pin.id)) }
-    finally { setReordering(false) }
+  async function removeBlock(block: TimeBlock) {
+    const pinCount = pins.filter(pin => pin.timeBlockId === block.id).length
+    const routeCount = routes.filter(route => route.timeBlockId === block.id).length
+    if (!window.confirm(`“${block.title}” 타임블록과 내부 핀 ${pinCount}개, 경로 ${routeCount}개를 모두 삭제할까요?`)) return
+    setBusy(true); setError('')
+    try { await onDeleteTimeBlock(block); setFormMode('none') }
+    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
+    finally { setBusy(false) }
   }
 
   return (
     <aside style={sidebarStyle}>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
       <div><h2 style={{ fontSize: '1rem', margin: '0 0 0.5rem' }}>일정</h2>
         <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
           {days.map(day => <button key={day.id} onClick={() => { onSelectDay(day.id); setFormMode('none') }} style={day.id === selectedDayId ? tabActive : tab}>
@@ -64,18 +69,26 @@ export function ScheduleSidebar(props: ScheduleSidebarProps) {
               <button onClick={() => onSelectTimeBlock(selected ? null : block.id)} style={blockMainBtn}>
                 <span style={{ fontWeight: 700 }}>{block.title}</span><span style={{ fontSize: '0.75rem', color: '#64748b' }}>{block.startTime}–{block.endTime} · 핀 {ordered.length}개</span>
               </button><button onClick={() => setFormMode({ editId: block.id })} style={linkBtn}>수정</button>
+              <button type="button" disabled={busy} onClick={() => void removeBlock(block)} style={{ ...linkBtn, color: '#be123c' }}>삭제</button>
             </div>
             {selected && <div style={pinList}>
               {ordered.length === 0 && <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.76rem' }}>아직 핀이 없습니다. 지도 우클릭 또는 장소 검색으로 추가하세요.</p>}
-              {ordered.map((pin, index) => <Fragment key={pin.id}>
+              {ordered.map(pin => <Fragment key={pin.id}>
                 <div style={pinRow}>
                   <button type="button" onClick={() => onFocusPin(pin.id)} style={pinOpenBtn} title={`${pin.title} 위치로 이동`}>
                     <span style={{ ...pinDot, background: pin.status === 'confirmed' ? '#ef4444' : '#3b82f6' }} />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pin.title}</span>
                   </button>
-                  <div style={orderControls}><button type="button" disabled={reordering || index === 0} onClick={() => void move(block, index, -1)}>↑</button>
-                    <button type="button" disabled={reordering || index === ordered.length - 1} onClick={() => void move(block, index, 1)}>↓</button>
-                    <span>{index + 1}</span></div>
+                  <div style={orderControls}><input key={`${pin.id}:${pin.version}:${orderById[pin.id]}`}
+                    aria-label={`${pin.title} 여행 순서`} title="같은 순서 번호를 여러 핀에 지정할 수 있습니다."
+                    type="number" min={1} max={9999} defaultValue={orderById[pin.id]} style={{ width: 52 }}
+                    onBlur={async event => {
+                      const value = Number(event.currentTarget.value)
+                      if (value === orderById[pin.id]) return
+                      if (!Number.isInteger(value) || value < 1 || value > 9999) { setError('여행 순서는 1~9999로 입력하세요.'); return }
+                      try { await onSetVisitOrder(pin, value); setError('') }
+                      catch (reason) { setError(String(reason)) }
+                    }} /></div>
                 </div>
                 {(routesByOrigin.get(pin.id) ?? []).filter(route => route.timeBlockId === block.id).map(route =>
                   <button type="button" key={route.id} style={routeRow} onClick={() => onSelectRoute(route)} title={`${route.name} 편집`}>

@@ -1,7 +1,8 @@
 import { Amplify } from 'aws-amplify'
 import { generateClient } from 'aws-amplify/data'
 import { Hub } from 'aws-amplify/utils'
-import { isLocalBackend, localRequest, localRoomCall } from './local-api'
+import { isLocalBackend, isSharedBackend, localRequest, localRoomCall } from './local-api'
+import type { DeleteTimeBlockInput } from '../../shared/contracts'
 import type { Schema } from '../../amplify/data/resource'
 import type {
   Room, RoomState, RoomEvent, RoomInvite, CreateRoomInput, UpdateRoomInput, JoinRoomInput,
@@ -29,6 +30,10 @@ function decodeEvent(value: unknown): RoomEvent {
 const client = () => generateClient<Schema>({ authMode: 'userPool' })
 
 export const roomApi = {
+  async deleteTimeBlock(input: DeleteTimeBlockInput): Promise<RoomEvent> {
+    if (isLocalBackend) return localRoomCall('deleteTimeBlock', { input })
+    return decodeEvent(unwrap(await client().mutations.deleteTimeBlock({ input: JSON.stringify(input) })))
+  },
   async listMyRooms(): Promise<Room[]> {
     if (isLocalBackend) return localRoomCall('listMyRooms')
     return json(unwrap(await client().queries.listMyRooms()))
@@ -94,6 +99,8 @@ export const roomApi = {
     return decodeEvent(unwrap(await client().mutations.sendMessage({ input: JSON.stringify(input) })))
   },
   subscribeRoom(roomId: string, onEvent: (event: RoomEvent) => void, onError: (error: unknown) => void) {
+    // Public demo tunnels may not support SSE; watchRoom polls in this mode.
+    if (isSharedBackend) return { unsubscribe() {} }
     if (isLocalBackend) {
       const source = new EventSource(`/api/room-events?roomId=${encodeURIComponent(roomId)}`)
       source.onmessage = message => onEvent(JSON.parse(message.data) as RoomEvent)
@@ -115,6 +122,7 @@ export function watchRoom(roomId: string, onState: (state: RoomState) => void, o
   let closed = false
   let running = false
   let dirty = false
+  let previousSnapshot = ''
   async function refresh() {
     if (closed) return
     dirty = true
@@ -124,7 +132,8 @@ export function watchRoom(roomId: string, onState: (state: RoomState) => void, o
       while (dirty && !closed) {
         dirty = false
         const state = await roomApi.getRoomState(roomId)
-        if (!closed) onState(state)
+        const snapshot = JSON.stringify(state)
+        if (!closed && snapshot !== previousSnapshot) { previousSnapshot = snapshot; onState(state) }
       }
     } catch (error) { if (!closed) onError(error) }
     finally { running = false }
@@ -135,7 +144,7 @@ export function watchRoom(roomId: string, onState: (state: RoomState) => void, o
   })
   const subscription = roomApi.subscribeRoom(roomId, () => { void refresh() }, onError)
   void refresh()
-  const recoveryTimer = setInterval(() => { void refresh() }, 15000)
+  const recoveryTimer = setInterval(() => { void refresh() }, isSharedBackend ? 1000 : 15000)
   return {
     refresh,
     unsubscribe() { closed = true; clearInterval(recoveryTimer); subscription.unsubscribe(); cancelHub() },

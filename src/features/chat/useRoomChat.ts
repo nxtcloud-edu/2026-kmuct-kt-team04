@@ -151,6 +151,7 @@ export function useRoomChat({
       id: m.id,
       userId: m.userId,
       content: m.content,
+      places: m.places,
       type: m.type,
       createdAt: m.createdAt,
     }))

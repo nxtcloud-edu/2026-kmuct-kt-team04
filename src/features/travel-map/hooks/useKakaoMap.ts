@@ -30,6 +30,7 @@ export function useKakaoMap({ pins, visitOrderByPinId, route, focusPinRequest, o
   const markerOverlaysRef = useRef<KakaoCustomOverlay[]>([])
   const routePolylineRef = useRef<KakaoPolyline | null>(null)
   const routeLabelRef = useRef<KakaoCustomOverlay | null>(null)
+  const fittedPinsRef = useRef('')
   const pinClickRef = useRef(onPinClick)
   const rightClickRef = useRef(onMapRightClick)
   const [ready, setReady] = useState(false)
@@ -73,7 +74,7 @@ export function useKakaoMap({ pins, visitOrderByPinId, route, focusPinRequest, o
     if (!maps || !map) return
     markerOverlaysRef.current.forEach(overlay => overlay.setMap(null))
     markerOverlaysRef.current = []
-    if (pins.length === 0) return
+    if (pins.length === 0) { fittedPinsRef.current = ''; return }
 
     const bounds = new maps.LatLngBounds()
     for (const pin of pins) {
@@ -95,8 +96,12 @@ export function useKakaoMap({ pins, visitOrderByPinId, route, focusPinRequest, o
       markerOverlaysRef.current.push(overlay)
       bounds.extend(position)
     }
-    if (!route && pins.length > 1 && !bounds.isEmpty()) map.setBounds(bounds)
-    else if (!route && pins.length === 1) map.panTo(new maps.LatLng(pins[0].latitude, pins[0].longitude))
+    const positionSignature = pins.map(pin => `${pin.id}:${pin.latitude}:${pin.longitude}`).sort().join('|')
+    if (positionSignature !== fittedPinsRef.current) {
+      if (!route && pins.length > 1 && !bounds.isEmpty()) map.setBounds(bounds)
+      else if (!route && pins.length === 1) map.panTo(new maps.LatLng(pins[0].latitude, pins[0].longitude))
+      fittedPinsRef.current = positionSignature
+    }
   }, [pins, ready, route, visitOrderByPinId])
 
   useEffect(() => {

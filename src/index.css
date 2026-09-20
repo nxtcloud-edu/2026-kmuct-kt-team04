@@ -1101,3 +1101,13 @@ button.canvas-dock__item:hover {
 .route-editor-dialog__secondary-actions button { padding: 0.45rem 0.7rem; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; color: #1d4ed8; cursor: pointer; }
 .route-editor-dialog__secondary-actions .route-editor-dialog__delete { border-color: #fecaca; background: #fff1f2; color: #be123c; }
 .route-editor-dialog button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.chat-place-list { display: grid; gap: 10px; margin-top: 12px; }
+.chat-place-card { display: grid; gap: 6px; padding: 12px; background: #fff; border: 1px solid #dde5f0; border-radius: 12px; color: #1e293b; }
+.chat-place-card p { margin: 0; font-size: 12px; line-height: 1.6; }
+.chat-place-card small { color: #64748b; }
+.chat-place-card a { color: #2563eb; font-size: 12px; text-decoration: underline; }
+.guest-identity { display: flex; align-items: center; gap: 6px; padding: 8px; border-radius: 12px; background: white; pointer-events: auto; font-size: 12px; }
+.guest-identity input { width: 110px; padding: 5px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.guest-identity button { padding: 5px; border: 0; border-radius: 6px; background: #e0edff; }
+@media (max-width: 800px) { .guest-identity > span, .guest-identity > small { display: none; } }

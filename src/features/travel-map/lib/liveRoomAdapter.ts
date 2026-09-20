@@ -13,6 +13,7 @@ export function createLiveRoomAdapter(roomId: string): RoomAdapter {
     watch: (onState, onError) => watchRoom(roomId, onState, onError),
     createTimeBlock: (input: CreateTimeBlockInput) => roomApi.createTimeBlock(input),
     updateTimeBlock: (input: UpdateTimeBlockInput) => roomApi.updateTimeBlock(input),
+    deleteTimeBlock: input => roomApi.deleteTimeBlock(input),
     createPin: (input: CreatePinInput) => roomApi.createPin(input),
     updatePin: (input: UpdatePinInput) => roomApi.updatePin(input),
     deletePin: (input: DeletePinInput) => roomApi.deletePin(input),

@@ -3,11 +3,11 @@ import { ChatPanel } from './features/chat/ChatPanel'
 import TravelMapPanel from './features/travel-map/TravelMapPanel'
 import { exampleRoomState } from '../shared/example-room-state'
 import { getLocalStatus, roomApi, watchRoom, type RoomState } from './lib/backend'
-import { isLocalBackend } from './lib/local-api'
+import { isLocalBackend, localRequest } from './lib/local-api'
 
 type LocalStatus = Awaited<ReturnType<typeof getLocalStatus>>
 interface DemoSession { status: LocalStatus; state: RoomState }
-interface TripSettingsValues { name: string; startDate: string; endDate: string; participantCount: number; expectedVersion: number }
+interface TripSettingsValues { name: string; destination: string; startDate: string; endDate: string; participantCount: number; expectedVersion: number }
 
 function App() {
   const [session, setSession] = useState<DemoSession | null>(null)
@@ -93,6 +93,7 @@ function CoreCanvas({ state, currentUserId, live, connectionError, onUpdateSetti
             {state.room.name || '이름 없는 여행'}
           </button>
         </div>
+        {live && <GuestIdentity key={currentUserId} name={state.members.find(member => member.userId === currentUserId)?.displayName ?? ''} />}
       </header>
 
       {connectionError && <p className="canvas-connection-error" role="alert">{connectionError}</p>}
@@ -146,6 +147,7 @@ interface TripSettingsDialogProps {
 
 function TripSettingsDialog({ state, onSave, onClose }: TripSettingsDialogProps) {
   const [name, setName] = useState(state.room.name || '이름 없는 여행')
+  const [destination, setDestination] = useState(state.room.destination)
   const [startDate, setStartDate] = useState(state.room.startDate)
   const [endDate, setEndDate] = useState(state.room.endDate)
   const [participantCount, setParticipantCount] = useState(state.room.participantCount ?? 1)
@@ -162,7 +164,7 @@ function TripSettingsDialog({ state, onSave, onClose }: TripSettingsDialogProps)
     setSaving(true)
     setError('')
     try {
-      await onSave({ name: name.trim(), startDate, endDate, participantCount, expectedVersion: baseVersion })
+      await onSave({ name: name.trim(), destination: destination.trim() || '미정', startDate, endDate, participantCount, expectedVersion: baseVersion })
       onClose()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -184,6 +186,7 @@ function TripSettingsDialog({ state, onSave, onClose }: TripSettingsDialogProps)
           <label>여행 이름
             <input type="text" maxLength={100} value={name} onChange={event => setName(event.target.value)} required />
           </label>
+          <label>여행 지역<input maxLength={100} value={destination} onChange={event => setDestination(event.target.value)} placeholder="예: 서울, 제주, 아직 미정" /></label>
           <div className="trip-settings__dates">
             <label>시작일<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} required /></label>
             <label>종료일<input type="date" value={endDate} min={startDate} onChange={event => setEndDate(event.target.value)} required /></label>
@@ -224,7 +227,7 @@ function updateDemoSettings(state: RoomState, values: TripSettingsValues): RoomS
       : { id: crypto.randomUUID(), roomId: state.room.id, date, dayNumber: index + 1 }
   })
   const settings = {
-    name: values.name, startDate: values.startDate, endDate: values.endDate, participantCount: values.participantCount,
+    name: values.name, destination: values.destination, startDate: values.startDate, endDate: values.endDate, participantCount: values.participantCount,
   }
   return {
     ...state,
@@ -244,3 +247,19 @@ function datesBetween(startDate: string, endDate: string): string[] {
 }
 
 export default App
+
+function GuestIdentity({ name }: { name: string }) {
+  const [draft, setDraft] = useState(name)
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
+  return <form className="guest-identity" onSubmit={async event => {
+    event.preventDefault(); setBusy(true)
+    try { await localRequest('/api/profile', { displayName: draft }); setNotice('저장됨') }
+    catch (error) { setNotice(String(error)) }
+    finally { setBusy(false) }
+  }}>
+    <span>모두 함께 쓰는 여행방</span>
+    <input aria-label="내 별명" value={draft} maxLength={40} required onChange={event => setDraft(event.target.value)} />
+    <button disabled={busy} type="submit">별명 저장</button><small role="status">{notice}</small>
+  </form>
+}

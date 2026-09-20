@@ -138,7 +138,16 @@ function MessageBubble({ message, mine, displayName }: MessageBubbleProps) {
   return (
     <li className={className}>
       <span className="chat-msg__author">{author}</span>
-      <span className="chat-msg__body">{message.content}</span>
+      <div className="chat-msg__body">{message.content}</div>
+      {message.places?.length ? <div className="chat-place-list">
+        {message.places.map((place, index) => <article key={place.placeId} className="chat-place-card">
+          <strong>{index + 1}. {place.name}</strong>
+          <small>{place.category}</small><p>{place.reason}</p>
+          <p>주소 · {place.address}</p>
+          {place.phone && <p>전화 · {place.phone}</p>}
+          <a href={`https://place.map.kakao.com/${encodeURIComponent(place.placeId)}`} target="_blank" rel="noreferrer">카카오맵에서 사진·후기·상세정보 보기 ↗</a>
+        </article>)}
+      </div> : null}
       <time className="chat-msg__time" dateTime={message.createdAt}>
         {formatTime(message.createdAt)}
       </time>

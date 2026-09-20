@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:shared": "tsc -b && vite build --mode shared",
+    "start:shared": "tsx server/start.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "check:backend": "tsc --project amplify/tsconfig.json",

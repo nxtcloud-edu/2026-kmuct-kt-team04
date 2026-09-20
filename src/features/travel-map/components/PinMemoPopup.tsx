@@ -7,6 +7,7 @@ export interface PinMemoValues {
   description: string
   category: string
   status: 'candidate' | 'confirmed'
+  visitOrder: number
 }
 
 interface PinMemoPopupProps {
@@ -22,15 +23,17 @@ export function PinMemoPopup({ pin, order, onSave, onDelete, onClose }: PinMemoP
   const [description, setDescription] = useState(pin.description)
   const [category, setCategory] = useState(pin.category)
   const [status, setStatus] = useState<'candidate' | 'confirmed'>(pin.status)
+  const [visitOrder, setVisitOrder] = useState(pin.visitOrder ?? order ?? 1)
   const [busy, setBusy] = useState<'save' | 'delete' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function handleSave() {
     setError(null)
     if (!title.trim()) return setError('제목을 입력하세요.')
+    if (!Number.isInteger(visitOrder) || visitOrder < 1 || visitOrder > 9999) return setError('여행 순서는 1~9999의 정수로 입력하세요.')
     setBusy('save')
     try {
-      await onSave(pin, { title: title.trim(), description: description.trim(), category: category.trim(), status })
+      await onSave(pin, { title: title.trim(), description: description.trim(), category: category.trim(), status, visitOrder })
       onClose()
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
     finally { setBusy(null) }
@@ -55,6 +58,7 @@ export function PinMemoPopup({ pin, order, onSave, onDelete, onClose }: PinMemoP
           <button type="button" onClick={onClose} style={closeBtn} aria-label="닫기">×</button>
         </header>
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
+          <label style={fieldLabel}>여행 순서 (중복 가능)<input type="number" min={1} max={9999} value={visitOrder} onChange={event => setVisitOrder(Number(event.target.value))} style={smallInput} /></label>
           <label style={fieldLabel}>카테고리<input value={category} maxLength={50} onChange={event => setCategory(event.target.value)} placeholder="예: 관광명소" style={smallInput} /></label>
           <label style={fieldLabel}>상태<select value={status} onChange={event => setStatus(event.target.value as 'candidate' | 'confirmed')} style={smallInput}>
             <option value="candidate">후보 · 파란색</option><option value="confirmed">확정 · 빨간색</option>

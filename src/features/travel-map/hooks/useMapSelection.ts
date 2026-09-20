@@ -16,7 +16,7 @@ export interface UseMapSelection {
 export function useMapSelection(state: RoomState | null): UseMapSelection {
   const days = useMemo(
     () => [...(state?.days ?? [])].sort((a, b) => a.dayNumber - b.dayNumber),
-    [state],
+    [state?.days],
   )
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null)
   const [selectedTimeBlockId, setSelectedTimeBlockId] = useState<string | null>(null)
@@ -27,14 +27,15 @@ export function useMapSelection(state: RoomState | null): UseMapSelection {
     return state.timeBlocks.filter(block => block.dayId === effectiveDayId)
       .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id))
   }, [state, effectiveDayId])
+  const effectiveBlockId = timeBlocksOfDay.some(block => block.id === selectedTimeBlockId) ? selectedTimeBlockId : null
 
   const visiblePins = useMemo(() => {
     if (!state) return []
-    const blocks = selectedTimeBlockId
-      ? timeBlocksOfDay.filter(block => block.id === selectedTimeBlockId)
+    const blocks = effectiveBlockId
+      ? timeBlocksOfDay.filter(block => block.id === effectiveBlockId)
       : timeBlocksOfDay
     return blocks.flatMap(block => orderedPinsForBlock(block, state.pins))
-  }, [state, selectedTimeBlockId, timeBlocksOfDay])
+  }, [state, effectiveBlockId, timeBlocksOfDay])
 
   const visitOrderByPinId = useMemo(
     () => pinOrderIndex(timeBlocksOfDay, state?.pins ?? []),
@@ -47,6 +48,6 @@ export function useMapSelection(state: RoomState | null): UseMapSelection {
   }, [])
   const selectTimeBlock = useCallback((timeBlockId: string | null) => setSelectedTimeBlockId(timeBlockId), [])
 
-  return { selectedDayId: effectiveDayId, selectedTimeBlockId, selectDay, selectTimeBlock,
+  return { selectedDayId: effectiveDayId, selectedTimeBlockId: effectiveBlockId, selectDay, selectTimeBlock,
     days, timeBlocksOfDay, visiblePins, visitOrderByPinId }
 }

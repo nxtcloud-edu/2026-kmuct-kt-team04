@@ -4,6 +4,7 @@ import { createLocalBackend } from './server/local-backend'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: mode === 'shared' ? { 'import.meta.env.VITE_SHARED_BACKEND': JSON.stringify('true') } : {},
   server: { host: '127.0.0.1' },
   plugins: [react(), {
     name: 'local-server-api',

@@ -1,4 +1,5 @@
-export const isLocalBackend = import.meta.env.DEV && import.meta.env.VITE_LOCAL_BACKEND === 'true'
+export const isSharedBackend = import.meta.env.VITE_SHARED_BACKEND === 'true'
+export const isLocalBackend = isSharedBackend || (import.meta.env.DEV && import.meta.env.VITE_LOCAL_BACKEND === 'true')
 
 export async function localRequest<T>(path: string, body?: unknown): Promise<T> {
   if (!isLocalBackend) throw new Error('AI_NOT_CONNECTED: 배포 서버의 AI 연결이 아직 구성되지 않았습니다.')

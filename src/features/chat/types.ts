@@ -28,6 +28,7 @@ export interface AiPinSuggestion {
 export interface AiPinDeletion { pinId: string }
 
 export interface ChatMessage {
+  places?: import('../../../shared/contracts').PlaceRecommendation[]
   id: string
   userId: string
   content: string
