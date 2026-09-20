@@ -7,18 +7,33 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:backend": "tsc --project amplify/tsconfig.json",
+    "check:infra": "tsx scripts/synth-backend.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "sandbox": "ampx sandbox --identifier team04-backend",
+    "sandbox:once": "ampx sandbox --identifier team04-backend --once"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1136.0",
+    "@aws-sdk/lib-dynamodb": "^3.1136.0",
+    "aws-amplify": "^6.20.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@aws-amplify/backend": "^1.25.1",
+    "@aws-amplify/backend-cli": "^1.10.0",
+    "@aws-appsync/utils": "^2.1.1",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "aws-cdk-lib": "^2.270.0",
+    "constructs": "^10.8.1",
     "oxlint": "^1.81.0",
+    "tsx": "^4.23.13",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   }
