@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { exampleRoomState } from '../../../shared/example-room-state'
 import type { Pin } from '../../../shared/contracts'
@@ -16,13 +16,23 @@ import type { PlaceSearchResult } from './services/placeSearch'
 // roomId가 없으면 임시 모드에서 exampleRoomState의 방 id를 사용합니다.
 interface TravelMapPanelProps {
   roomId?: string
+  /** 선택된 타임블록이 바뀔 때 상위에 알립니다. (채팅 등에서 AI 작업 대상 공유용) */
+  onSelectedTimeBlockChange?: (timeBlockId: string | null) => void
 }
 
-export function TravelMapPanel({ roomId }: TravelMapPanelProps) {
+export function TravelMapPanel({ roomId, onSelectedTimeBlockChange }: TravelMapPanelProps) {
   const effectiveRoomId = roomId ?? exampleRoomState.room.id
   const room = useRoomData(effectiveRoomId)
   const selection = useMapSelection(room.state)
   const [openPinId, setOpenPinId] = useState<string | null>(null)
+  // 지도가 메인이므로 일정 패널은 접을 수 있게 둡니다. (지도 위 오버레이)
+  const [scheduleOpen, setScheduleOpen] = useState(true)
+
+  // 선택 타임블록 변경을 상위로 전달 (채팅/AI 대상 공유)
+  const notifyTimeBlock = onSelectedTimeBlockChange
+  useEffect(() => {
+    notifyTimeBlock?.(selection.selectedTimeBlockId)
+  }, [notifyTimeBlock, selection.selectedTimeBlockId])
 
   const openPin: Pin | null =
     room.state?.pins.find(p => p.id === openPinId) ?? null
@@ -88,34 +98,50 @@ export function TravelMapPanel({ roomId }: TravelMapPanelProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {room.mode === 'demo' && (
-        <div style={demoBanner}>
-          임시 데이터 모드 (AWS 미연결) — 변경 사항은 브라우저 메모리에만 저장되며 새로고침 시 사라집니다.
-        </div>
-      )}
-      {room.error && <div style={errorBanner}>오류: {room.error}</div>}
+    // 지도가 메인 배경(전체). 일정/검색/배너는 그 위에 떠 있는 오버레이입니다.
+    <div style={rootStyle}>
+      {/* 지도 배경 */}
+      <div style={mapLayer}>
+        <MapView pins={selection.visiblePins} onPinClick={setOpenPinId} />
+      </div>
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <ScheduleSidebar
-          days={selection.days}
-          selectedDayId={selection.selectedDayId}
-          onSelectDay={selection.selectDay}
-          timeBlocks={selection.timeBlocksOfDay}
-          selectedTimeBlockId={selection.selectedTimeBlockId}
-          onSelectTimeBlock={selection.selectTimeBlock}
-          pins={room.state?.pins ?? []}
-          onCreateTimeBlock={handleCreateTimeBlock}
-          onUpdateTimeBlock={handleUpdateTimeBlock}
-        />
+      {/* 상단 배너 (임시 모드/오류) */}
+      <div style={topBanners}>
+        {room.mode === 'demo' && (
+          <div style={demoBanner}>
+            임시 데이터 모드 (AWS 미연결) — 변경 사항은 브라우저 메모리에만 저장되며 새로고침 시 사라집니다.
+          </div>
+        )}
+        {room.error && <div style={errorBanner}>오류: {room.error}</div>}
+      </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <MapView pins={selection.visiblePins} onPinClick={setOpenPinId} />
+      {/* 왼쪽 일정(타임테이블) 오버레이 */}
+      {scheduleOpen ? (
+        <div style={leftPanel}>
+          <div style={leftPanelHeader}>
+            <span style={{ fontWeight: 700 }}>{room.state?.room.name ?? '여행 일정'}</span>
+            <button onClick={() => setScheduleOpen(false)} style={collapseBtn} aria-label="일정 접기">‹</button>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <ScheduleSidebar
+              days={selection.days}
+              selectedDayId={selection.selectedDayId}
+              onSelectDay={selection.selectDay}
+              timeBlocks={selection.timeBlocksOfDay}
+              selectedTimeBlockId={selection.selectedTimeBlockId}
+              onSelectTimeBlock={selection.selectTimeBlock}
+              pins={room.state?.pins ?? []}
+              onCreateTimeBlock={handleCreateTimeBlock}
+              onUpdateTimeBlock={handleUpdateTimeBlock}
+            />
           </div>
           <PlaceSearchPanel targetTimeBlock={selectedTimeBlock} onAddPin={handleAddPin} />
         </div>
-      </div>
+      ) : (
+        <button onClick={() => setScheduleOpen(true)} style={expandBtn} aria-label="일정 펼치기">
+          일정 ›
+        </button>
+      )}
 
       {openPin && (
         <PinMemoPopup pin={openPin} onSave={handleSavePin} onClose={() => setOpenPinId(null)} />
@@ -124,11 +150,40 @@ export function TravelMapPanel({ roomId }: TravelMapPanelProps) {
   )
 }
 
+const rootStyle: CSSProperties = {
+  position: 'relative', width: '100%', height: '100%', minHeight: 400, overflow: 'hidden',
+}
+const mapLayer: CSSProperties = {
+  position: 'absolute', inset: 0,
+}
+const topBanners: CSSProperties = {
+  position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+  zIndex: 20, display: 'flex', flexDirection: 'column', gap: '0.25rem', maxWidth: '90%', marginTop: '0.5rem',
+}
+const leftPanel: CSSProperties = {
+  position: 'absolute', top: '0.75rem', left: '0.75rem', bottom: '0.75rem', zIndex: 15,
+  width: 300, maxWidth: '80vw',
+  display: 'flex', flexDirection: 'column',
+  background: 'rgba(255,255,255,0.97)', borderRadius: 12,
+  boxShadow: '0 8px 30px rgba(15,23,42,0.18)', overflow: 'hidden',
+}
+const leftPanelHeader: CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  padding: '0.6rem 0.9rem', borderBottom: '1px solid #e2e8f0', background: '#f8fafc',
+}
+const collapseBtn: CSSProperties = {
+  border: 'none', background: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b', lineHeight: 1,
+}
+const expandBtn: CSSProperties = {
+  position: 'absolute', top: '0.75rem', left: '0.75rem', zIndex: 15,
+  padding: '0.5rem 0.8rem', border: 'none', borderRadius: 10, cursor: 'pointer',
+  background: 'rgba(255,255,255,0.97)', boxShadow: '0 6px 20px rgba(15,23,42,0.18)', fontWeight: 600, color: '#334155',
+}
 const demoBanner: CSSProperties = {
-  padding: '0.5rem 1rem', background: '#fef3c7', color: '#92400e', fontSize: '0.85rem', borderBottom: '1px solid #fde68a',
+  padding: '0.5rem 1rem', background: '#fef3c7', color: '#92400e', fontSize: '0.85rem', borderRadius: 8, border: '1px solid #fde68a',
 }
 const errorBanner: CSSProperties = {
-  padding: '0.5rem 1rem', background: '#fee2e2', color: '#991b1b', fontSize: '0.85rem', borderBottom: '1px solid #fecaca',
+  padding: '0.5rem 1rem', background: '#fee2e2', color: '#991b1b', fontSize: '0.85rem', borderRadius: 8, border: '1px solid #fecaca',
 }
 
 export default TravelMapPanel
